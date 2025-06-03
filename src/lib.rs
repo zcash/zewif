@@ -51,10 +51,11 @@
 //! ## Usage Examples
 //!
 //! ```no_run
-//! use zewif::{Account, Address, BlockHeight, Network, Zewif, ZewifWallet};
+//! use zewif::{Account, Address, BlockHash, BlockHeight, Network, Zewif, ZewifWallet};
 //!
 //! // Create a new ZeWIF container
-//! let mut zewif = Zewif::new(BlockHeight::from_u32(2000000));
+//! let block_hash = BlockHash::from_bytes([0u8; 32]);
+//! let mut zewif = Zewif::new(BlockHeight::from_u32(2000000), block_hash);
 //!
 //! // Create a new wallet for the main network
 //! let mut wallet = ZewifWallet::new(Network::Main);

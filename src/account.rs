@@ -2,8 +2,10 @@ use bc_envelope::prelude::*;
 use std::collections::HashSet;
 
 use crate::{
+    envelope_indexed_objects_for_predicate,
+    orchard::OrchardSentOutput,
+    sapling::SaplingSentOutput,
     Address, BlockHash, BlockHeight, Indexed, NoQuotesDebugOption, TxId,
-    envelope_indexed_objects_for_predicate, orchard::OrchardSentOutput, sapling::SaplingSentOutput,
 };
 
 /// A logical grouping of addresses and transaction history within a wallet.
@@ -291,7 +293,7 @@ mod tests {
 
     use bc_envelope::Attachments;
 
-    use crate::{BlockHash, BlockHeight, test_envelope_roundtrip};
+    use crate::{test_envelope_roundtrip, BlockHash, BlockHeight};
 
     use super::Account;
 
