@@ -35,36 +35,46 @@ macro_rules! blob {
             ///
             /// This is the primary constructor when you have an exact-sized
             /// array available.
-            pub fn new(data: [u8; $size]) -> Self { Self(data) }
+            pub fn new(data: [u8; $size]) -> Self {
+                Self(data)
+            }
 
             /// Returns the length of this blob in bytes.
             ///
             /// This will always return `$size` for this type.
-            pub fn len(&self) -> usize { $size }
+            pub fn len(&self) -> usize {
+                $size
+            }
 
             /// Returns `true` if this blob contains no bytes.
             ///
             /// This will always return `false` for this type (unless `$size` is
             /// 0).
-            pub fn is_empty(&self) -> bool { $size != 0 }
+            pub fn is_empty(&self) -> bool {
+                $size != 0
+            }
 
             /// Converts this blob to a `Vec<u8>`, creating a copy of the data.
-            pub fn to_vec(&self) -> Vec<u8> { self.0.to_vec() }
+            pub fn to_vec(&self) -> Vec<u8> {
+                self.0.to_vec()
+            }
 
             /// Exposes the underlying byte array as a slice.
-            pub fn as_slice(&self) -> &[u8] { &self.0 }
+            pub fn as_slice(&self) -> &[u8] {
+                &self.0
+            }
 
             /// Exposes the underlying byte array.
-            pub fn as_bytes(&self) -> &[u8; $size] { &self.0 }
+            pub fn as_bytes(&self) -> &[u8; $size] {
+                &self.0
+            }
 
             /// Creates an instance from a slice of bytes.
             ///
             /// # Errors
             /// Returns an error if the slice's length doesn't match the
             /// expected size ($size).
-            pub fn from_slice(
-                data: &[u8],
-            ) -> Result<Self, std::array::TryFromSliceError> {
+            pub fn from_slice(data: &[u8]) -> Result<Self, std::array::TryFromSliceError> {
                 Ok(Self(<[u8; $size]>::try_from(data)?))
             }
 
@@ -73,9 +83,7 @@ macro_rules! blob {
             /// # Errors
             /// Returns an error if the vector's length doesn't match the
             /// expected size ($size).
-            pub fn from_vec(
-                data: Vec<u8>,
-            ) -> Result<Self, std::array::TryFromSliceError> {
+            pub fn from_vec(data: Vec<u8>) -> Result<Self, std::array::TryFromSliceError> {
                 Ok(Self(<[u8; $size]>::try_from(&data[..])?))
             }
 
@@ -83,11 +91,9 @@ macro_rules! blob {
             pub fn from_hex(hex: &str) -> $crate::Result<Self> {
                 let data = hex::decode(hex)?;
                 let data_len = data.len();
-                Self::from_vec(data).map_err(|_| {
-                    $crate::Error::HexLengthMismatch {
-                        expected: $size,
-                        actual: data_len,
-                    }
+                Self::from_vec(data).map_err(|_| $crate::Error::HexLengthMismatch {
+                    expected: $size,
+                    actual: data_len,
                 })
             }
 
@@ -98,20 +104,22 @@ macro_rules! blob {
                 let mut data = hex::decode(hex)?;
                 let data_len = data.len();
                 data.reverse();
-                Self::from_vec(data).map_err(|_| {
-                    $crate::Error::HexLengthMismatch {
-                        expected: $size,
-                        actual: data_len,
-                    }
+                Self::from_vec(data).map_err(|_| $crate::Error::HexLengthMismatch {
+                    expected: $size,
+                    actual: data_len,
                 })
             }
 
             /// Formats the bytes of this object as a hex string.
-            pub fn to_hex(&self) -> String { hex::encode(self.0) }
+            pub fn to_hex(&self) -> String {
+                hex::encode(self.0)
+            }
         }
 
         impl PartialEq for $name {
-            fn eq(&self, other: &Self) -> bool { self.0.eq(&other.0) }
+            fn eq(&self, other: &Self) -> bool {
+                self.0.eq(&other.0)
+            }
         }
 
         impl Eq for $name {}
@@ -124,7 +132,9 @@ macro_rules! blob {
 
         impl Clone for $name {
             #[allow(clippy::non_canonical_clone_impl)]
-            fn clone(&self) -> Self { Self(self.0.clone()) }
+            fn clone(&self) -> Self {
+                Self(self.0.clone())
+            }
         }
 
         impl std::fmt::Debug for $name {
@@ -134,23 +144,33 @@ macro_rules! blob {
         }
 
         impl AsRef<[u8]> for $name {
-            fn as_ref(&self) -> &[u8] { &self.0[..] }
+            fn as_ref(&self) -> &[u8] {
+                &self.0[..]
+            }
         }
 
         impl From<$name> for Vec<u8> {
-            fn from(blob: $name) -> Vec<u8> { blob.to_vec() }
+            fn from(blob: $name) -> Vec<u8> {
+                blob.to_vec()
+            }
         }
 
         impl From<&$name> for Vec<u8> {
-            fn from(blob: &$name) -> Vec<u8> { blob.to_vec() }
+            fn from(blob: &$name) -> Vec<u8> {
+                blob.to_vec()
+            }
         }
 
         impl From<Vec<u8>> for $name {
-            fn from(data: Vec<u8>) -> Self { Self::from_vec(data).unwrap() }
+            fn from(data: Vec<u8>) -> Self {
+                Self::from_vec(data).unwrap()
+            }
         }
 
         impl From<&[u8]> for $name {
-            fn from(data: &[u8]) -> Self { Self::from_slice(data).unwrap() }
+            fn from(data: &[u8]) -> Self {
+                Self::from_slice(data).unwrap()
+            }
         }
 
         impl From<$name> for bc_envelope::prelude::CBOR {
@@ -168,9 +188,7 @@ macro_rules! blob {
         impl TryFrom<bc_envelope::prelude::CBOR> for $name {
             type Error = dcbor::Error;
 
-            fn try_from(
-                cbor: bc_envelope::prelude::CBOR,
-            ) -> Result<Self, Self::Error> {
+            fn try_from(cbor: bc_envelope::prelude::CBOR) -> Result<Self, Self::Error> {
                 let bytes = cbor.try_into_byte_string()?;
                 Self::from_slice(&bytes).map_err(|_| {
                     dcbor::Error::msg(format!(

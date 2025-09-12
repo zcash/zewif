@@ -1,5 +1,7 @@
-use crate::error::Error;
 use bc_envelope::prelude::*;
+use std::str::FromStr;
+
+use crate::error::Error;
 
 /// Represents a Zcash network environment (mainnet, testnet, or regtest).
 ///
@@ -44,29 +46,50 @@ pub enum Network {
     Regtest,
 }
 
+impl Network {
+    fn encode(&self) -> &'static str {
+        match self {
+            Network::Main => "main",
+            Network::Test => "test",
+            Network::Regtest => "regtest",
+        }
+    }
+
+    fn decode(value: &str) -> Option<Self> {
+        match value {
+            "main" => Some(Network::Main),
+            "test" => Some(Network::Test),
+            "regtest" => Some(Network::Regtest),
+            _ => None,
+        }
+    }
+}
+
+impl core::fmt::Display for Network {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.encode())
+    }
+}
+
+impl FromStr for Network {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::decode(s).ok_or(Error::InvalidNetwork(s.to_string()))
+    }
+}
+
 impl From<Network> for String {
     fn from(value: Network) -> String {
-        match value {
-            Network::Main => "main".to_string(),
-            Network::Test => "test".to_string(),
-            Network::Regtest => "regtest".to_string(),
-        }
+        value.encode().to_string()
     }
 }
 
 impl TryFrom<String> for Network {
     type Error = Error;
 
-    fn try_from(value: String) -> crate::error::Result<Self> {
-        if value == "main" {
-            Ok(Network::Main)
-        } else if value == "test" {
-            Ok(Network::Test)
-        } else if value == "regtest" {
-            Ok(Network::Regtest)
-        } else {
-            Err(Error::InvalidNetwork(value))
-        }
+    fn try_from(value: String) -> Result<Self, Error> {
+        Self::decode(&value).ok_or(Error::InvalidNetwork(value))
     }
 }
 
