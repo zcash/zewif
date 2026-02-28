@@ -2,7 +2,6 @@ use bc_envelope::prelude::*;
 
 use crate::{IncrementalWitness, blob, blob_envelope};
 
-/// The depth of the Zcash Sapling note commitment tree.
 const SAPLING_COMMITMENT_TREE_DEPTH: usize = 32;
 
 blob!(
@@ -14,35 +13,8 @@ impl Copy for MerkleHashSapling {}
 
 blob_envelope!(MerkleHashSapling);
 
-/// A cryptographic witness proving that a Sapling note commitment exists in the note commitment tree.
-///
-/// `SaplingWitness` is a specialized form of incremental Merkle tree witness for the
-/// Sapling protocol. It proves that a specific note commitment is included in the
-/// global Sapling note commitment tree, which is necessary when spending a note.
-///
-/// # Zcash Concept Relation
-/// In Zcash's Sapling protocol:
-///
-/// - **Note Commitment Tree**: A Merkle tree containing all Sapling note commitments
-/// - **Merkle Path**: The path from a leaf (note commitment) to the root of the tree
-/// - **Witness**: The authentication path proving a leaf exists in the tree
-/// - **Anchors**: Root hashes of the note commitment tree at specific blockchain heights
-///
-/// When spending a Sapling note, a zero-knowledge proof must demonstrate that the
-/// note's commitment exists in the tree at a specific anchor (root hash), without
-/// revealing which specific commitment is being spent. The witness provides the
-/// necessary path information to create this proof.
-///
-/// # Data Preservation
-/// During wallet migration, complete witness data must be preserved for all unspent
-/// notes. This includes:
-///
-/// - The authentication path (sequence of hashes forming the Merkle path)
-/// - The position of the note commitment in the tree
-/// - The tree depth used (32 for Sapling)
-///
-/// Without this witness data, unspent notes cannot be spent as it would be impossible
-/// to prove their inclusion in the note commitment tree.
+/// An incremental witness for a Sapling note commitment, proving its
+/// inclusion in the global note commitment tree. Required to spend the note.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SaplingWitness(
     IncrementalWitness<SAPLING_COMMITMENT_TREE_DEPTH, MerkleHashSapling>,

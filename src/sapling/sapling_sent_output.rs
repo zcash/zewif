@@ -2,72 +2,22 @@ use bc_envelope::prelude::*;
 
 use crate::{Amount, Indexed, Memo};
 
-/// Represents a sent output in a Sapling shielded transaction within a Zcash wallet.
+/// Sender-side metadata for a Sapling output not recoverable from the chain.
 ///
-/// `SaplingSentOutput` stores the plaintext details of a Sapling note that was sent by the
-/// wallet, which are not recoverable from the blockchain after transmission. This information
-/// enables selective disclosure, allowing a sender to prove they made a payment to a specific
-/// shielded address without revealing additional transaction details.
-///
-/// # Zcash Concept Relation
-/// In Zcash's Sapling protocol (activated in October 2018):
-///
-/// - **Shielded transactions** encrypt transaction details on the blockchain using zk-SNARKs
-/// - **Notes** are the fundamental unit of value transfer, similar to UTXOs in transparent transactions
-/// - **Sent output information** is stored by the sender's wallet to enable proofs of payment
-///
-/// Each sent output contains components of the Sapling note:
-/// - Diversifier: Part of the recipient's shielded address derivation
-/// - Public key: The recipient's public key for the transaction
-/// - Value: The amount of ZEC transferred
-/// - Rcm: Random commitment material used to construct the note commitment
-///
-/// # Data Preservation
-/// During wallet migration, sent output information must be preserved to maintain
-/// the ability to generate payment proofs for regulatory compliance, auditing,
-/// or other selective disclosure purposes. The sending wallet is the only entity
-/// that has this information in plaintext form.
-///
-/// # Examples
-/// ```
-/// # use zewif::{sapling::SaplingSentOutput, Blob, Amount};
-/// # use zewif::Result;
-/// # fn example() -> Result<()> {
-/// // Create a new sent output
-/// let mut sent_output = SaplingSentOutput::new();
-///
-/// let value = Amount::from_u64(5000000)?; // 0.05 ZEC
-/// sent_output.set_value(value);
-///
-/// // Access the components
-/// let amount = sent_output.value();
-/// let zats: i64 = amount.into();
-/// assert_eq!(zats, 5000000);
-/// # Ok(())
-/// # }
-/// ```
+/// Preserves the recipient address, value, and memo so the sending wallet
+/// can reconstruct payment history and generate proofs of payment.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SaplingSentOutput {
-    /// The index of the output in the transaction's Sapling bundle.
     index: usize,
 
-    /// The string representation of the address to which the output was sent.
-    ///
-    /// This should be either a Sapling address or a Unified address with a Sapling receiver.
-    /// We preserve the original address string because in the case of Unified addresses, it is not
-    /// otherwise possible to reconstruct the data for receivers other than the Sapling receiver,
-    /// and as a consequence the recipient address in a restored wallet would appear different than
-    /// in the source wallet.
+    /// The recipient address string (a Sapling address or a unified address
+    /// with a Sapling receiver). Preserved verbatim because unified address
+    /// encoding includes receivers that can't be reconstructed from the
+    /// Sapling component alone.
     recipient_address: String,
 
-    /// The value of ZEC sent in this output, in zatoshis (1 ZEC = 10^8 zatoshis).
-    ///
-    /// This 64-bit unsigned integer specifies the amount transferred. It is constrained
-    /// by the protocol to a maximum value (2^63 - 1 zatoshis), ensuring it fits within
-    /// the note's value field for Sapling transactions.
     value: Amount,
 
-    /// The memo attached to this output, if any.
     memo: Option<Memo>,
 }
 
@@ -82,7 +32,6 @@ impl Indexed for SaplingSentOutput {
 }
 
 impl SaplingSentOutput {
-    /// Creates a new `SaplingSentOutput` with default values.
     pub fn new() -> Self {
         Self {
             index: 0,
@@ -92,7 +41,6 @@ impl SaplingSentOutput {
         }
     }
 
-    /// Creates a new `SaplingSentOutput` from its constituent parts.
     pub fn from_parts(
         index: usize,
         recipient_address: String,
@@ -107,59 +55,26 @@ impl SaplingSentOutput {
         }
     }
 
-    /// Returns the string representation of the address used in construction of the output.
-    ///
-    /// This will be either a Sapling address or a Unified address with a Sapling receiver.
-    /// We preserve the original address string because in the case of Unified addresses, it is not
-    /// otherwise possible to reconstruct the data for receivers other than the Sapling receiver,
-    /// and as a consequence the recipient address in a restored wallet would appear different than
-    /// in the source wallet.
     pub fn recipient_address(&self) -> &str {
         &self.recipient_address
     }
 
-    /// Sets the string representation of the address used in construction of the output.
     pub fn set_recipient_address(&mut self, recipient_address: String) {
         self.recipient_address = recipient_address;
     }
 
-    /// Returns the value (amount) of ZEC sent in this output.
-    ///
-    /// This represents the amount of ZEC transferred in this specific note,
-    /// measured in zatoshis (1 ZEC = 10^8 zatoshis).
-    ///
-    /// # Returns
-    /// The amount of ZEC as an `Amount`.
-    ///
-    /// # Examples
-    /// ```
-    /// # use zewif::{sapling::SaplingSentOutput, Amount};
-    /// # use zewif::Result;
-    /// # fn example() -> Result<()> {
-    /// let mut sent_output = SaplingSentOutput::new();
-    /// sent_output.set_value(Amount::from_u64(10_000_000)?); // 0.1 ZEC
-    ///
-    /// let value = sent_output.value();
-    /// let zats: i64 = value.into();
-    /// assert_eq!(zats, 10_000_000);
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn value(&self) -> Amount {
         self.value
     }
 
-    /// Sets the value (amount) of ZEC for this sent output.
     pub fn set_value(&mut self, value: Amount) {
         self.value = value;
     }
 
-    /// Returns the memo associated with the output, if known.
     pub fn memo(&self) -> Option<&Memo> {
         self.memo.as_ref()
     }
 
-    /// Sets the memo associated with the output.
     pub fn set_memo(&mut self, memo: Option<Memo>) {
         self.memo = memo;
     }
