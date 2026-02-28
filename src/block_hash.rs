@@ -5,37 +5,7 @@ use std::{
     io::{self, Read, Write},
 };
 
-/// A transaction identifier (BlockHash) represented as a 32-byte hash.
-///
-/// `BlockHash` is a specialized wrapper around a 32-byte array representing a block's
-/// unique identifier in the Zcash blockchain.
-///
-/// # Zcash Concept Relation
-/// In Zcash (and Bitcoin-derived cryptocurrencies), transaction IDs are critical identifiers
-/// used to reference transactions throughout the protocol:
-/// - In transaction inputs to reference previous outputs being spent
-/// - In block data structures to identify included transactions
-/// - In client APIs and explorers to look up transaction details
-///
-/// Block hashes are displayed in reverse byte order by convention (to match Bitcoin's historical
-/// display format), while stored internally in little-endian order.
-///
-/// # Data Preservation
-/// The `BlockHash` type preserves the exact 32-byte transaction identifier as found in wallet
-/// data files, ensuring that transaction references maintain their cryptographic integrity
-/// during wallet migrations.
-///
-/// # Examples
-/// ```
-/// # use zewif::BlockHash;
-/// // Create a BlockHash from a byte array
-/// let tx_bytes = [0u8; 32];
-/// let txid = BlockHash::from_bytes(tx_bytes);
-///
-/// // Display the BlockHash in the conventional reversed format used by explorers
-/// // Note: this would display as a string of 64 hex characters (zeros in this example)
-/// println!("Block Hash: {}", txid);
-/// ```
+/// A 32-byte block hash, displayed in reverse byte order by convention.
 #[derive(Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Hash)]
 pub struct BlockHash([u8; 32]);
 

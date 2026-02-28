@@ -1,42 +1,7 @@
 use crate::error::Error;
 use bc_envelope::prelude::*;
 
-/// Represents a Zcash network environment (mainnet, testnet, or regtest).
-///
-/// The `Network` enum identifies which Zcash network a wallet, address,
-/// or transaction belongs to. Each network has different consensus rules,
-/// address encodings, and initial blockchain parameters.
-///
-/// # Zcash Concept Relation
-/// Zcash, like Bitcoin, operates on multiple networks:
-///
-/// - **Mainnet**: The primary Zcash network where real ZEC with monetary value is transferred
-/// - **Testnet**: A testing network that simulates mainnet but uses worthless test coins
-/// - **Regtest**: A private "regression test" network for local development and testing
-///
-/// These networks are isolated from each other, with different genesis blocks,
-/// address formats, and consensus parameters.
-///
-/// # Data Preservation
-/// The `Network` value is critical during wallet migration to ensure addresses and
-/// transactions are reconstructed for the correct network. Address formats differ
-/// between networks, and migrating a wallet to an incorrect network would render
-/// it unusable.
-///
-/// # Examples
-/// In the ZeWIF format, the Network value is stored at the wallet level:
-/// ```
-/// # use zewif::{ZewifWallet, Network};
-/// // Wallet on the main Zcash network
-/// let network = Network::Main;
-///
-/// // Wallets on mainnet and testnet have incompatible address formats
-/// match network {
-///     Network::Main => println!("This wallet stores real ZEC"),
-///     Network::Test => println!("This wallet stores test coins only"),
-///     Network::Regtest => println!("This wallet is for local testing"),
-/// }
-/// ```
+/// The Zcash network a wallet belongs to: mainnet, testnet, or regtest.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Network {
     Main,

@@ -2,41 +2,14 @@ use bc_envelope::prelude::*;
 
 use crate::NonHardenedChildIndex;
 
-/// Hierarchical deterministic (HD) derivation information for wallet addresses.
+/// BIP-44/ZIP-32 derivation path components (change flag + address index).
 ///
-/// `DerivationInfo` captures the BIP-44/ZIP-32 derivation path components for
-/// addresses in a hierarchical deterministic wallet. It specifically tracks the
-/// last two non-hardened components of an HD path:
-/// - Whether it's a change address (typically 0 = external, 1 = change)
-/// - The address index within that chain
-///
-/// # Zcash Concept Relation
-/// Zcash follows BIP-44 and ZIP-32 for hierarchical deterministic key derivation,
-/// with paths typically structured as:
-/// ```text
-/// m / purpose' / coin_type' / account' / change / address_index
-/// ```
-///
-/// Where:
-/// - `purpose'` is typically 44' for transparent or 32' for shielded
-/// - `coin_type'` is 133' for Zcash
-/// - `account'` is the account number (hardened)
-/// - `change` is 0 for external addresses or 1 for internal (change) addresses
-/// - `address_index` is the sequential index of the address
-///
-/// The apostrophes (') indicate hardened derivation, which prevents parent key
-/// compromise from affecting child keys.
-///
-/// # Data Preservation
-/// During wallet migration, this information is preserved to maintain the
-/// hierarchical relationship between keys and the ability to derive the same
-/// addresses in the new wallet.
+/// Captures the last two non-hardened path components:
+/// `m / purpose' / coin_type' / account' / change / address_index`
 ///
 /// # Examples
 /// ```
 /// # use zewif::{DerivationInfo, NonHardenedChildIndex};
-/// // Create derivation info for an external address (change = 0)
-/// // with index 5
 /// let change = NonHardenedChildIndex::from(0u32); // external
 /// let address_index = NonHardenedChildIndex::from(5u32);
 ///

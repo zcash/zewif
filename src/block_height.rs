@@ -3,46 +3,7 @@ use std::cmp::{Ord, Ordering};
 use std::fmt;
 use std::ops::{Add, Sub};
 
-/// A block's position in the blockchain, represented as a distance from the genesis block.
-///
-/// `BlockHeight` represents the number of blocks between a specific block and the genesis
-/// block (block zero). Each block increments the height by one, forming a total ordering
-/// that defines the blockchain's canonical sequence.
-///
-/// # Zcash Concept Relation
-/// In Zcash, like Bitcoin, block height is crucial for:
-///
-/// - Identifying when transactions were confirmed
-/// - Determining when network upgrades activate
-/// - Calculating confirmation counts
-/// - Anchoring shielded transactions to specific blockchain states
-///
-/// Many Zcash protocol parameters are defined in terms of block heights, including
-/// upgrade activation heights and consensus rule changes.
-///
-/// # Data Preservation
-/// `BlockHeight` preserves the numeric height values from wallet data, which are essential
-/// for chronological ordering of transactions and for determining whether specific network
-/// features were active when a transaction was created.
-///
-/// # Implementation Details
-/// Internally, block heights are stored as unsigned 32-bit integers, which can represent
-/// blocks up to approximately 136 years into the future at Zcash's target rate of one
-/// block every 75 seconds.
-///
-/// # Examples
-/// ```
-/// # use zewif::BlockHeight;
-/// // The genesis block
-/// let genesis = BlockHeight::from(0u32);
-///
-/// // Block #1,000,000
-/// let millionth = BlockHeight::from(1_000_000u32);
-///
-/// // Calculate difference between blocks
-/// let blocks_between = millionth - genesis;
-/// assert_eq!(blocks_between, 1_000_000);
-/// ```
+/// A block's position in the chain, stored as a `u32` distance from genesis.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct BlockHeight(u32);

@@ -1,45 +1,7 @@
-/// A Merkle path to a specific note commitment in a Merkle tree, along with metadata about the
-/// state of the tree at the time the Merkle path was computed.
+/// A Merkle authentication path proving a note commitment's inclusion in the
+/// commitment tree, along with the tree state at the time it was computed.
 ///
-/// `IncrementalWitness` creates and maintains the cryptographic evidence needed to prove
-/// that a specific note commitment exists in the blockchain's commitment tree.
-///
-/// # Zcash Concept Relation
-/// In Zcash's shielded protocols, witnesses serve several critical functions:
-///
-/// - **Spending Notes**: When spending a shielded note, the witness proves the note exists
-///   in the blockchain's commitment tree without revealing which specific note is being spent
-///
-/// Each shielded protocol has a different Merkle tree depth:
-/// - Sprout: 29 levels deep, using SHA-256 compression
-/// - Sapling: 32 levels deep, using Pedersen hashes
-/// - Orchard: 32 levels deep, using Poseidon hashes
-///
-/// # Data Preservation
-/// During wallet migration, maintaining complete witness data is absolutely critical:
-///
-/// - **Unspent Notes**: Without valid witnesses, unspent notes cannot be spent after migration
-/// - **Path Components**: The authentication path for each note must be preserved exactly
-/// - **Tree State**: The current state of the tree at the time of the witness creation
-///
-/// # Type Parameters
-/// * `DEPTH` - The depth of the Merkle tree (29 for Sprout, 32 for Sapling/Orchard)
-/// * `Node` - The hash type used for tree nodes (varies by protocol)
-///
-/// # Examples
-/// ```
-/// # use zewif::{IncrementalWitness};
-///
-/// // Create a witness for a note at a specific position
-/// let witness = IncrementalWitness::<32, [u8; 32]>::from_parts(
-///     [0u8; 32], // fake note commitment hash
-///     12345, 
-///     vec![[1u8; 32]; 32], // fake hashes
-///     [2u8; 32], // fake anchor
-///     67891, // tree size at anchor
-///     vec![] // optional, can be empty
-/// );
-/// ```
+/// Without valid witness data, unspent shielded notes cannot be spent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IncrementalWitness<const DEPTH: usize, Node> {
     note_commitment: Node,

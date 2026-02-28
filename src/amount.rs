@@ -15,47 +15,8 @@ pub const MAX_MONEY: u64 = 21_000_000 * COIN;
 /// Maximum balance as a signed value
 pub const MAX_BALANCE: i64 = MAX_MONEY as i64;
 
-/// A type-safe representation of a ZCash amount in zatoshis (zats).
+/// A ZEC amount in zatoshis (1 ZEC = 10^8 zats), bounded by MAX_MONEY.
 ///
-/// `Amount` represents a monetary value in the Zcash cryptocurrency, stored
-/// internally as a signed 64-bit integer count of zatoshis. One ZEC equals
-/// 100,000,000 zatoshis (1 ZEC = 10^8 zats), similar to Bitcoin's satoshis.
-///
-/// The signed representation allows for representing both positive amounts
-/// (payments received) and negative amounts (payments sent) in transaction
-/// and balance calculations.
-///
-/// # Zcash Concept Relation
-/// In Zcash, monetary values are represented in two units:
-/// - ZEC: The main unit of currency (analogous to dollars)
-/// - zatoshis (zats): The smallest indivisible unit (analogous to cents)
-///
-/// Amount enforces the protocol limit of 21 million total ZEC, preventing
-/// overflow or underflow in calculations with proper error handling.
-///
-/// # Data Preservation
-/// The `Amount` type preserves the exact zatoshi values from wallet data,
-/// maintaining precise balances and transaction amounts during wallet migration.
-/// When displayed, values are formatted as ZEC with decimal places.
-///
-/// # Examples
-/// ```
-/// # use zewif::Amount;
-/// # use zewif::Result;
-/// #
-/// # fn example() -> Result<()> {
-/// // Create an amount of 1.5 ZEC (150,000,000 zatoshis)
-/// let amount = Amount::from_u64(150_000_000)?;
-///
-/// // Check if the amount is positive
-/// assert!(amount.is_positive());
-///
-/// // Convert to raw zatoshi value
-/// let zats: i64 = amount.into();
-/// assert_eq!(zats, 150_000_000);
-/// # Ok(())
-/// # }
-/// ```
 /// FIXME: Amounts in the zewif format should never be negative; negative values are only used
 /// transiently in the protocol.
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]

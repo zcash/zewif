@@ -4,42 +4,7 @@ use std::ops::{
     Index, IndexMut, Range, RangeFrom, RangeFull, RangeInclusive, RangeTo, RangeToInclusive,
 };
 
-/// A Bitcoin-style script for spending or encumbering coins in transparent transactions.
-///
-/// `Script` represents a serialized Bitcoin script, which is a sequence of operations used to
-/// specify conditions for spending Zcash coins in transparent transactions. In ZeWIF,
-/// scripts appear in two contexts:
-///
-/// - `script_pubkey` in outputs: Defines spending conditions (e.g., P2PKH, P2SH)
-/// - `script_sig` in inputs: Contains signatures and data to satisfy spending conditions
-///
-/// Internally, `Script` is a wrapper around [`Data`](crate::Data), providing a
-/// type-safe representation for script handling.
-///
-/// # Zcash Concept Relation
-/// Zcash inherits the Bitcoin script system for its transparent UTXO model. Unlike
-/// shielded transactions, which use zero-knowledge proofs, transparent transactions
-/// use explicit scripts to validate spending conditions.
-///
-/// Common script patterns in Zcash transparent addresses include:
-/// - Pay to Public Key Hash (P2PKH): Sends to a standard transparent address
-/// - Pay to Script Hash (P2SH): Sends to a script hash, enabling more complex conditions
-///
-/// # Data Preservation
-/// The `Script` type preserves the exact binary representation of transaction scripts
-/// from wallet data, ensuring cryptographic integrity during wallet migrations.
-///
-/// # Examples
-/// ```
-/// # use zewif::{Script, Data};
-/// // Create a script from binary data (this would typically be from a transaction)
-/// let script_bytes = vec![0x76, 0xa9, 0x14, /* more script bytes */];
-/// let script = Script::from(Data::from_vec(script_bytes.clone()));
-///
-/// // Check script properties
-/// assert_eq!(script.len(), script_bytes.len());
-/// assert!(!script.is_empty());
-/// ```
+/// A serialized Bitcoin-style script (scriptPubKey or scriptSig).
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Script(Data);
 

@@ -5,43 +5,7 @@ use crate::{
 };
 use bc_envelope::prelude::*;
 
-/// A complete Zcash wallet with multiple accounts and cryptographic key material.
-///
-/// `ZewifWallet` represents an entire wallet consisting of multiple accounts, all operating
-/// on the same Zcash network. It can optionally include seed material for generating keys.
-/// This structure is the primary container for user wallet data but is not the top level
-/// of the interchange format hierarchy (that's `Zewif`).
-///
-/// # Zcash Concept Relation
-///
-/// In Zcash wallet architecture:
-///
-/// - **Network Context**: Wallets operate within a specific Zcash network environment
-///   (mainnet, testnet, regtest)
-/// - **Multi-Account Organization**: A single wallet can contain multiple accounts
-///   for different purposes or users
-/// - **HD Wallet Structure**: When a seed is present, the wallet follows hierarchical
-///   deterministic (HD) principles for key derivation
-///
-/// # Data Preservation
-///
-/// During wallet migration, the following wallet data must be preserved:
-///
-/// - **Network**: The Zcash network context (mainnet, testnet, regtest)
-/// - **Seed Material**: When available, the cryptographic material used for key generation
-/// - **Accounts**: All accounts contained within the wallet, with their full structure
-/// - **Vendor-Specific Information**: Custom metadata stored in attachments
-///
-/// # Examples
-/// ```no_run
-/// # use zewif::{ZewifWallet, Network, Account, AccountViewingKey, SeedMaterial};
-/// let mut wallet = ZewifWallet::new(Network::Main);
-///
-/// let account = Account::new(AccountViewingKey::TransparentAddressSet);
-/// wallet.add_account(account);
-///
-/// assert_eq!(wallet.network(), Network::Main);
-/// ```
+/// A Zcash wallet: network context, optional seed material, and accounts.
 #[derive(Clone, PartialEq)]
 pub struct ZewifWallet {
     index: usize,
