@@ -2,7 +2,7 @@ use bc_envelope::prelude::*;
 
 use crate::{
     sapling::SaplingExtendedFullViewingKey,
-    sprout::SproutSpendingKey,
+    sprout::SproutViewingKey,
     UnifiedFullViewingKey,
 };
 
@@ -17,10 +17,9 @@ pub enum AccountViewingKey {
     Ufvk(UnifiedFullViewingKey),
     /// A standalone Sapling extended full viewing key (canonical encoding).
     SaplingExtFvk(SaplingExtendedFullViewingKey),
-    /// A Sprout spending key (canonical encoding, opaque). Sprout did not
-    /// have a separate viewing key type; the spending key serves as the
-    /// viewing capability.
-    SproutSpendingKey(SproutSpendingKey),
+    /// A Sprout viewing key (64 bytes: `a_pk` + `sk_enc`). Sufficient to
+    /// detect incoming Sprout notes.
+    SproutViewingKey(SproutViewingKey),
     /// A set of transparent addresses with no unified key structure
     /// (legacy zcashd random-key wallet).
     TransparentAddressSet,
@@ -35,8 +34,8 @@ impl From<AccountViewingKey> for Envelope {
             AccountViewingKey::SaplingExtFvk(fvk) => {
                 ("sapling_ext_fvk", Envelope::new(fvk))
             }
-            AccountViewingKey::SproutSpendingKey(key) => {
-                ("sprout_spending_key", Envelope::new(key.data().clone()))
+            AccountViewingKey::SproutViewingKey(key) => {
+                ("sprout_viewing_key", Envelope::new(key.data().clone()))
             }
             AccountViewingKey::TransparentAddressSet => {
                 ("transparent_address_set", Envelope::new("transparent_address_set"))
@@ -62,9 +61,9 @@ impl TryFrom<Envelope> for AccountViewingKey {
                 let fvk: SaplingExtendedFullViewingKey = envelope.extract_subject()?;
                 Ok(AccountViewingKey::SaplingExtFvk(fvk))
             }
-            "sprout_spending_key" => {
+            "sprout_viewing_key" => {
                 let data: crate::Data = envelope.extract_subject()?;
-                Ok(AccountViewingKey::SproutSpendingKey(SproutSpendingKey::new(data)))
+                Ok(AccountViewingKey::SproutViewingKey(SproutViewingKey::new(data)))
             }
             "transparent_address_set" => {
                 Ok(AccountViewingKey::TransparentAddressSet)
@@ -93,8 +92,8 @@ mod tests {
                 1 => AccountViewingKey::SaplingExtFvk(
                     crate::sapling::SaplingExtendedFullViewingKey::random(),
                 ),
-                2 => AccountViewingKey::SproutSpendingKey(
-                    crate::sprout::SproutSpendingKey::random(),
+                2 => AccountViewingKey::SproutViewingKey(
+                    crate::sprout::SproutViewingKey::random(),
                 ),
                 _ => AccountViewingKey::TransparentAddressSet,
             }
