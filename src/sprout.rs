@@ -44,17 +44,66 @@ impl TryFrom<Envelope> for SproutSpendingKey {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::{test_envelope_roundtrip, Data, RandomInstance};
+/// A Sprout shielded address (zc-address).
+///
+/// Stored as the address string. No internal structure is parsed;
+/// the importing wallet either understands Sprout or it doesn't.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SproutAddress {
+    address: String,
+}
 
-    use super::SproutSpendingKey;
-
-    impl RandomInstance for SproutSpendingKey {
-        fn random() -> Self {
-            SproutSpendingKey::new(Data::random())
-        }
+impl SproutAddress {
+    pub fn new(address: impl Into<String>) -> Self {
+        Self { address: address.into() }
     }
 
+    pub fn address(&self) -> &str {
+        &self.address
+    }
+}
+
+impl From<SproutAddress> for Envelope {
+    fn from(value: SproutAddress) -> Self {
+        Envelope::new(value.address)
+            .add_type("SproutAddress")
+    }
+}
+
+impl TryFrom<Envelope> for SproutAddress {
+    type Error = bc_envelope::Error;
+
+    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
+        envelope.check_type("SproutAddress")?;
+        let address: String = envelope.extract_subject()?;
+        Ok(Self { address })
+    }
+}
+
+#[cfg(test)]
+impl crate::RandomInstance for SproutSpendingKey {
+    fn random() -> Self {
+        SproutSpendingKey::new(Data::random())
+    }
+}
+
+#[cfg(test)]
+impl crate::RandomInstance for SproutAddress {
+    fn random() -> Self {
+        SproutAddress::new(String::random())
+    }
+}
+
+#[cfg(test)]
+mod spending_key_tests {
+    use crate::test_envelope_roundtrip;
+    use super::SproutSpendingKey;
     test_envelope_roundtrip!(SproutSpendingKey);
+}
+
+#[cfg(test)]
+mod address_tests {
+    use crate::test_envelope_roundtrip;
+    use super::SproutAddress;
+    test_envelope_roundtrip!(SproutAddress);
 }

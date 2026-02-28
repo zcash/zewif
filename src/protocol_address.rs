@@ -1,7 +1,7 @@
 use crate::{
     UnifiedAddress,
     error::Error,
-    sapling, transparent,
+    sapling, sprout, transparent,
 };
 use bc_envelope::prelude::*;
 
@@ -58,13 +58,16 @@ use bc_envelope::prelude::*;
 /// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum ProtocolAddress {
-    /// An exposed transparent (T-address) similar to Bitcoin's.
+    /// A transparent address (t-address).
     Transparent(transparent::Address),
 
-    /// A Sapling address (Z-address).
+    /// A Sprout shielded address (zc-address, legacy).
+    Sprout(sprout::SproutAddress),
+
+    /// A Sapling shielded address (zs-address).
     Sapling(Box<sapling::Address>),
 
-    /// A unified address (U-address) that contains multiple receiver types.
+    /// A unified address (u-address) containing multiple receiver types.
     Unified(Box<UnifiedAddress>),
 }
 
@@ -95,6 +98,7 @@ impl ProtocolAddress {
     pub fn as_string(&self) -> String {
         match self {
             ProtocolAddress::Transparent(addr) => addr.address().to_string(),
+            ProtocolAddress::Sprout(addr) => addr.address().to_string(),
             ProtocolAddress::Sapling(addr) => addr.address().to_string(),
             ProtocolAddress::Unified(addr) => addr.address().to_string(),
         }
@@ -174,6 +178,7 @@ impl From<ProtocolAddress> for Envelope {
     fn from(value: ProtocolAddress) -> Self {
         match value {
             ProtocolAddress::Transparent(addr) => addr.into(),
+            ProtocolAddress::Sprout(addr) => addr.into(),
             ProtocolAddress::Sapling(addr) => (*addr).into(),
             ProtocolAddress::Unified(addr) => (*addr).into(),
         }
@@ -186,6 +191,8 @@ impl TryFrom<Envelope> for ProtocolAddress {
     fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
         if envelope.has_type("TransparentAddress") {
             Ok(ProtocolAddress::Transparent(envelope.try_into()?))
+        } else if envelope.has_type("SproutAddress") {
+            Ok(ProtocolAddress::Sprout(envelope.try_into()?))
         } else if envelope.has_type("SaplingAddress") {
             Ok(ProtocolAddress::Sapling(Box::new(envelope.try_into()?)))
         } else if envelope.has_type("UnifiedAddress") {
@@ -200,23 +207,18 @@ impl TryFrom<Envelope> for ProtocolAddress {
 mod tests {
     use super::ProtocolAddress;
     use crate::{
-        UnifiedAddress, sapling, test_envelope_roundtrip, transparent,
+        UnifiedAddress, sapling, sprout, test_envelope_roundtrip, transparent,
     };
 
     impl crate::RandomInstance for ProtocolAddress {
         fn random() -> Self {
-            let mut rng = rand::thread_rng();
-            let choice = rand::Rng::gen_range(&mut rng, 0..3);
-            match choice {
-                0 => {
-                    ProtocolAddress::Transparent(transparent::Address::random())
-                }
-                1 => ProtocolAddress::Sapling(Box::new(
-                    sapling::Address::random(),
-                )),
-                _ => {
-                    ProtocolAddress::Unified(Box::new(UnifiedAddress::random()))
-                }
+            use rand::Rng;
+            let mut rng = rand::rng();
+            match rng.random_range(0..4u32) {
+                0 => ProtocolAddress::Transparent(transparent::Address::random()),
+                1 => ProtocolAddress::Sprout(sprout::SproutAddress::random()),
+                2 => ProtocolAddress::Sapling(Box::new(sapling::Address::random())),
+                _ => ProtocolAddress::Unified(Box::new(UnifiedAddress::random())),
             }
         }
     }
