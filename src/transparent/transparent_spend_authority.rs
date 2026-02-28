@@ -1,57 +1,35 @@
 use super::TransparentSpendingKey;
+use crate::DerivationInfo;
 use bc_envelope::prelude::*;
 
-/// The cryptographic authorization needed to spend funds from a transparent Zcash address.
+/// How a transparent address's key was obtained.
 ///
-/// `TransparentSpendAuthority` represents the spending capability for transparent
-/// addresses (those starting with 't'). It distinguishes between directly stored keys
-/// and keys that are derived from another source, such as an HD wallet seed.
-///
-/// # Zcash Concept Relation
-/// In Zcash's transparent address system (inherited from Bitcoin):
-///
-/// - Spending requires proving ownership through cryptographic signatures
-/// - This typically involves a private key corresponding to a public key hash (P2PKH)
-///   or a script hash (P2SH)
-/// - In hierarchical deterministic (HD) wallets, transparent keys are often derived
-///   from a master seed using BIP-44 paths
-///
-/// # Data Preservation
-/// During wallet migration, the `TransparentSpendAuthority` preserves:
-///
-/// - Directly stored spending keys that exist in the source wallet
-/// - Information about keys that are derived from HD wallet seeds
-///
-/// This ensures that spending capability is maintained after migration while
-/// preserving the wallet's key management structure.
-///
-/// # Examples
-/// ```
-/// # use zewif::{Blob, transparent::{TransparentSpendAuthority, TransparentSpendingKey}};
-/// // Direct spending key
-/// let spending_key = TransparentSpendingKey::new([0; 32]);
-/// let spend_authority = TransparentSpendAuthority::SpendingKey(spending_key);
-///
-/// // Derived key (from HD wallet seed)
-/// let derived_authority = TransparentSpendAuthority::Derived;
-/// ```
+/// For HD-derived addresses, the derivation info is sufficient to recover
+/// the spending key from the seed. For independently-generated keys (e.g.
+/// legacy zcashd random-key addresses), the private key must be stored
+/// directly.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TransparentSpendAuthority {
-    /// Direct spending key stored in the wallet
-    SpendingKey(TransparentSpendingKey),
-
-    /// Spending key derived from another source (e.g., HD wallet seed)
-    /// The actual derivation information is typically stored with the address
-    Derived,
+    /// Key derived from an HD seed; derivation info is sufficient.
+    Derived(DerivationInfo),
+    /// Independently generated key; must store the private key.
+    Imported(TransparentSpendingKey),
 }
 
 impl From<TransparentSpendAuthority> for Envelope {
     fn from(value: TransparentSpendAuthority) -> Self {
         match value {
-            TransparentSpendAuthority::SpendingKey(key) => key.into(),
-            TransparentSpendAuthority::Derived => Envelope::new("Derived"),
+            TransparentSpendAuthority::Derived(info) => {
+                Envelope::new("derived")
+                    .add_type("TransparentSpendAuthority")
+                    .add_assertion("derivation_info", info)
+            }
+            TransparentSpendAuthority::Imported(key) => {
+                Envelope::new(key)
+                    .add_type("TransparentSpendAuthority")
+                    .add_assertion("variant", "imported")
+            }
         }
-        .add_type("TransparentSpendAuthority")
     }
 }
 
@@ -60,12 +38,11 @@ impl TryFrom<Envelope> for TransparentSpendAuthority {
 
     fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
         envelope.check_type("TransparentSpendAuthority")?;
-        if let Ok(spending_key) = TransparentSpendingKey::try_from(envelope.clone()) {
-            Ok(TransparentSpendAuthority::SpendingKey(spending_key))
-        } else if envelope.extract_subject::<String>()? == "Derived" {
-            Ok(TransparentSpendAuthority::Derived)
+        if let Ok(info) = envelope.try_object_for_predicate::<DerivationInfo>("derivation_info") {
+            Ok(TransparentSpendAuthority::Derived(info))
         } else {
-            Err(crate::error::Error::InvalidTransparentSpendAuthority.into())
+            let key: TransparentSpendingKey = envelope.extract_subject()?;
+            Ok(TransparentSpendAuthority::Imported(key))
         }
     }
 }
@@ -73,12 +50,12 @@ impl TryFrom<Envelope> for TransparentSpendAuthority {
 #[cfg(test)]
 impl crate::RandomInstance for TransparentSpendAuthority {
     fn random() -> Self {
-        let mut rng = rand::thread_rng();
-        let a = rand::Rng::gen_range(&mut rng, 0..=1);
-        if a == 0 {
-            TransparentSpendAuthority::SpendingKey(TransparentSpendingKey::random())
+        use rand::Rng;
+        let mut rng = rand::rng();
+        if rng.random_bool(0.5) {
+            TransparentSpendAuthority::Derived(DerivationInfo::random())
         } else {
-            TransparentSpendAuthority::Derived
+            TransparentSpendAuthority::Imported(TransparentSpendingKey::random())
         }
     }
 }
