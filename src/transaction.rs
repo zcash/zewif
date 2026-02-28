@@ -1,72 +1,27 @@
-use super::{BlockHeight, Data, TxId};
-use crate::TxBlockPosition;
+use crate::{Amount, BlockHeight, TransactionData, TxBlockPosition, TxId};
 use bc_envelope::prelude::*;
 
-/// A Zcash transaction that can combine transparent and multiple shielded protocol components.
+/// A Zcash transaction's metadata as tracked by a wallet.
 ///
-/// `Transaction` represents a complete Zcash transaction, which can include components from
-/// transparent Bitcoin-style inputs/outputs as well as from any of the three Zcash shielded
-/// protocols: Sprout, Sapling, and Orchard. The transaction structure preserves both blockchain
-/// data (block height, timestamp) and the detailed components needed to represent the
-/// transaction in a wallet format.
-///
-/// # Zcash Concept Relation
-///
-/// In Zcash:
-///
-/// - **Unified Transaction Format**: Transactions can seamlessly combine transparent and
-///   different shielded protocols in a single operation
-/// - **Multi-Protocol Support**: Zcash has evolved through multiple shielded protocols,
-///   and transactions can include components from any of them:
-///   - Transparent (Bitcoin-style public inputs/outputs)
-///   - Sprout (original shielded protocol using JoinSplits)
-///   - Sapling (improved shielded protocol with separate spends/outputs)
-///   - Orchard (latest shielded protocol using unified actions)
-/// - **Transaction Lifecycle**: Transactions go through stages (Pending, Confirmed, Failed, Abandoned)
-///   that represent their status on the blockchain
-///
-/// # Data Preservation
-///
-/// During wallet migration, the following transaction data must be preserved:
-///
-/// - **Identity**: The unique transaction ID (txid)
-/// - **Blockchain Context**: Block height, timestamp, block hash when available
-/// - **Status Information**: Whether the transaction is pending, confirmed, failed, or abandoned
-/// - **Raw Transaction**: Optional full binary transaction data
-/// - **Protocol-Specific Components**:
-///   - Transparent inputs and outputs
-///   - Sapling spends and outputs
-///   - Orchard actions
-///   - Sprout JoinSplits
-///
-/// # Examples
-/// ```no_run
-/// # use zewif::{Transaction, TxId, BlockHeight};
-/// // Create a new transaction with a transaction ID (in practice, a real ID)
-/// let txid = TxId::from_bytes([0u8; 32]);
-/// let mut tx = Transaction::new(txid);
-///
-/// // Set transaction metadata
-/// tx.set_mined_height(BlockHeight::from(1000000));
-/// ```
+/// Stores the transaction identifier along with optional blockchain context
+/// (mining height, block position, fee) and the transaction data itself
+/// (either full raw bytes or compact light-wallet representation).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Transaction {
-    /// The transaction id.
     txid: TxId,
-    /// The raw transaction data, if known.
-    raw: Option<Data>,
-    /// The height for which the transaction was constructed, which implies
-    /// the consensus branch for which the transaction was intended, if known.
+    /// Full or compact transaction data, if available.
+    tx_data: Option<TransactionData>,
+    /// The consensus branch height this transaction targets, if known.
     target_height: Option<BlockHeight>,
-    /// The height at which the transaction was mined, if known.
-    /// It is possible that if a rollback occurred just after the zeWIF
-    /// export, the transaction could have been unmined, and possibly
-    /// remined at a different height.
+    /// The height at which this transaction was mined, if known.
+    /// May become invalid after a rollback near the export height.
     mined_height: Option<BlockHeight>,
-    /// The hash of the block containing the transaction and the index of the transaction within
-    /// the block, if known.
+    /// Block hash and index within the block, if known.
     block_position: Option<TxBlockPosition>,
-    /// Additional arbitrary metadata related to the transaction.
+    /// Transaction fee in zatoshis, if known.
+    fee: Option<Amount>,
+    /// The expiry height for this transaction, if known.
+    expiry_height: Option<BlockHeight>,
     attachments: Attachments,
 }
 
@@ -76,10 +31,12 @@ impl Transaction {
     pub fn new(txid: TxId) -> Self {
         Self {
             txid,
-            raw: None,
+            tx_data: None,
             target_height: None,
             mined_height: None,
             block_position: None,
+            fee: None,
+            expiry_height: None,
             attachments: Attachments::new(),
         }
     }
@@ -88,28 +45,24 @@ impl Transaction {
         self.txid
     }
 
-    pub fn set_txid(&mut self, txid: TxId) {
-        self.txid = txid;
+    pub fn tx_data(&self) -> Option<&TransactionData> {
+        self.tx_data.as_ref()
     }
 
-    pub fn raw(&self) -> Option<&Data> {
-        self.raw.as_ref()
+    pub fn set_tx_data(&mut self, tx_data: TransactionData) {
+        self.tx_data = Some(tx_data);
     }
 
-    pub fn set_raw(&mut self, raw: Data) {
-        self.raw = Some(raw);
-    }
-
-    pub fn target_height(&self) -> Option<&BlockHeight> {
-        self.target_height.as_ref()
+    pub fn target_height(&self) -> Option<BlockHeight> {
+        self.target_height
     }
 
     pub fn set_target_height(&mut self, height: BlockHeight) {
         self.target_height = Some(height);
     }
 
-    pub fn mined_height(&self) -> Option<&BlockHeight> {
-        self.mined_height.as_ref()
+    pub fn mined_height(&self) -> Option<BlockHeight> {
+        self.mined_height
     }
 
     pub fn set_mined_height(&mut self, height: BlockHeight) {
@@ -120,8 +73,24 @@ impl Transaction {
         self.block_position.as_ref()
     }
 
-    pub fn set_block_position(&mut self, block_position: Option<TxBlockPosition>) {
-        self.block_position = block_position;
+    pub fn set_block_position(&mut self, block_position: TxBlockPosition) {
+        self.block_position = Some(block_position);
+    }
+
+    pub fn fee(&self) -> Option<Amount> {
+        self.fee
+    }
+
+    pub fn set_fee(&mut self, fee: Amount) {
+        self.fee = Some(fee);
+    }
+
+    pub fn expiry_height(&self) -> Option<BlockHeight> {
+        self.expiry_height
+    }
+
+    pub fn set_expiry_height(&mut self, height: BlockHeight) {
+        self.expiry_height = Some(height);
     }
 }
 
@@ -130,10 +99,12 @@ impl From<Transaction> for Envelope {
     fn from(value: Transaction) -> Self {
         let e = Envelope::new(value.txid)
             .add_type("Transaction")
-            .add_optional_assertion("raw", value.raw)
+            .add_optional_assertion("tx_data", value.tx_data)
             .add_optional_assertion("target_height", value.target_height)
             .add_optional_assertion("mined_height", value.mined_height)
-            .add_optional_assertion("block_position", value.block_position);
+            .add_optional_assertion("block_position", value.block_position)
+            .add_optional_assertion("fee", value.fee)
+            .add_optional_assertion("expiry_height", value.expiry_height);
         value.attachments.add_to_envelope(e)
     }
 }
@@ -144,19 +115,23 @@ impl TryFrom<Envelope> for Transaction {
     fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
         envelope.check_type("Transaction")?;
         let txid = envelope.extract_subject()?;
-        let raw = envelope.try_optional_object_for_predicate("raw")?;
+        let tx_data = envelope.try_optional_object_for_predicate("tx_data")?;
         let target_height = envelope.try_optional_object_for_predicate("target_height")?;
         let mined_height = envelope.try_optional_object_for_predicate("mined_height")?;
         let block_position = envelope.try_optional_object_for_predicate("block_position")?;
+        let fee = envelope.try_optional_object_for_predicate("fee")?;
+        let expiry_height = envelope.try_optional_object_for_predicate("expiry_height")?;
         let attachments = Attachments::try_from_envelope(&envelope)
             .map_err(|e| bc_envelope::Error::General(format!("attachments: {}", e)))?;
 
         Ok(Self {
             txid,
-            raw,
+            tx_data,
             target_height,
             mined_height,
             block_position,
+            fee,
+            expiry_height,
             attachments,
         })
     }
@@ -167,16 +142,21 @@ mod tests {
     use bc_envelope::Attachments;
 
     use super::Transaction;
-    use crate::{BlockHeight, Data, TxBlockPosition, TxId, test_envelope_roundtrip};
+    use crate::{
+        Amount, BlockHeight, TransactionData, TxBlockPosition, TxId,
+        test_envelope_roundtrip,
+    };
 
     impl crate::RandomInstance for Transaction {
         fn random() -> Self {
             Self {
                 txid: TxId::random(),
-                raw: Data::opt_random(),
+                tx_data: TransactionData::opt_random(),
                 target_height: BlockHeight::opt_random(),
                 mined_height: BlockHeight::opt_random(),
                 block_position: TxBlockPosition::opt_random(),
+                fee: Amount::opt_random(),
+                expiry_height: BlockHeight::opt_random(),
                 attachments: Attachments::random(),
             }
         }
