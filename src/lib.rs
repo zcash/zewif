@@ -84,10 +84,12 @@ mod_use!(test_utils);
 // Modules requiring qualified paths
 pub mod orchard;
 pub mod sapling;
+pub mod sprout;
 pub mod transparent;
 
 // Modules that can use unqualified paths
 mod_use!(account);
+mod_use!(account_viewing_key);
 mod_use!(address);
 mod_use!(amount);
 mod_use!(anchor);
@@ -100,20 +102,25 @@ mod_use!(error);
 mod_use!(derivation_info);
 mod_use!(incremental_witness);
 mod_use!(indexed);
+mod_use!(key_source);
 mod_use!(memo);
 mod_use!(mnemonic_language);
 mod_use!(network);
 mod_use!(non_hardened_child_index);
 mod_use!(protocol_address);
+mod_use!(received_output);
+mod_use!(scan_range);
 mod_use!(script);
 mod_use!(legacy_seed);
 mod_use!(seed_material);
 mod_use!(seed_fingerprint);
 mod_use!(string_utils);
 mod_use!(transaction);
+mod_use!(transaction_data);
 mod_use!(tx_block_position);
 mod_use!(txid);
 mod_use!(unified_address);
+mod_use!(unified_full_viewing_key);
 mod_use!(zewif_envelope);
 mod_use!(zewif_impl);
 mod_use!(zewif_wallet);
