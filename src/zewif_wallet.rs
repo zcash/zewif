@@ -34,19 +34,13 @@ use bc_envelope::prelude::*;
 ///
 /// # Examples
 /// ```no_run
-/// # use zewif::{ZewifWallet, Network, Account, SeedMaterial};
-/// // Create a new wallet for the Zcash mainnet
+/// # use zewif::{ZewifWallet, Network, Account, AccountViewingKey, SeedMaterial};
 /// let mut wallet = ZewifWallet::new(Network::Main);
 ///
-/// // Add a new account to the wallet
-/// let account = Account::new();
+/// let account = Account::new(AccountViewingKey::TransparentAddressSet);
 /// wallet.add_account(account);
 ///
-/// // Access the wallet's network
 /// assert_eq!(wallet.network(), Network::Main);
-///
-/// // If seed material were available, you could add it:
-/// // wallet.set_seed_material(seed_material);
 /// ```
 #[derive(Clone, PartialEq)]
 pub struct ZewifWallet {

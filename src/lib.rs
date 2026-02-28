@@ -51,20 +51,16 @@
 //! ## Usage Examples
 //!
 //! ```no_run
-//! use zewif::{Account, Address, BlockHash, BlockHeight, Network, Zewif, ZewifWallet};
+//! use zewif::{Account, AccountViewingKey, BlockHash, BlockHeight, Network, Zewif, ZewifWallet};
 //!
-//! // Create a new ZeWIF container
 //! let block_hash = BlockHash::from_bytes([0u8; 32]);
 //! let mut zewif = Zewif::new(BlockHeight::from_u32(2000000), block_hash);
 //!
-//! // Create a new wallet for the main network
 //! let mut wallet = ZewifWallet::new(Network::Main);
 //!
-//! // Add a new account to the wallet
-//! let mut account = Account::new();
+//! let mut account = Account::new(AccountViewingKey::TransparentAddressSet);
 //! account.set_name("Default Account");
 //!
-//! // Add the account to the wallet and the wallet to the ZeWIF container
 //! wallet.add_account(account);
 //! zewif.add_wallet(wallet);
 //! ```
