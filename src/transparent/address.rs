@@ -1,4 +1,4 @@
-use crate::DerivationInfo;
+use crate::{DerivationInfo, Script};
 
 use super::TransparentSpendAuthority;
 use anyhow::Context;
@@ -29,6 +29,8 @@ use bc_envelope::prelude::*;
 /// - **Address string**: The canonical string representation (e.g., "t1...")
 /// - **Spending authority**: Private key information needed to spend funds
 /// - **Derivation information**: HD wallet path data for derived addresses
+/// - **Redeem script**: For P2SH addresses, the script that hashes to the address's
+///   script-hash and is required at spend time
 ///
 /// # Examples
 /// ```
@@ -62,6 +64,13 @@ pub struct Address {
     /// Optional HD wallet derivation information
     /// When present, this contains the path information for HD wallets
     derivation_info: Option<DerivationInfo>,
+
+    /// Optional P2SH redeem script
+    /// When present, this contains the script bytes that hash to the address's
+    /// script-hash. Required at spend time for P2SH addresses (those beginning
+    /// with 't3'). Independent of `spend_authority`: a wallet may have both a
+    /// redeem script and a spending key for one of its inner keys.
+    redeem_script: Option<Script>,
 }
 
 impl Address {
@@ -85,6 +94,7 @@ impl Address {
             address: address.into(),
             spend_authority: None,
             derivation_info: None,
+            redeem_script: None,
         }
     }
 
@@ -143,6 +153,31 @@ impl Address {
     pub fn set_derivation_info(&mut self, derivation_info: DerivationInfo) {
         self.derivation_info = Some(derivation_info);
     }
+
+    /// Returns the P2SH redeem script for this address, if available.
+    ///
+    /// For P2SH addresses ('t3...'), the redeem script is the script whose
+    /// hash matches the address's script-hash; it must be provided at spend
+    /// time. For non-P2SH addresses, this will typically be `None`.
+    ///
+    /// # Returns
+    /// - `Some(&Script)` if a redeem script has been associated with this address
+    /// - `None` if no redeem script is known (e.g. P2PKH addresses)
+    pub fn redeem_script(&self) -> Option<&Script> {
+        self.redeem_script.as_ref()
+    }
+
+    /// Sets the P2SH redeem script for this address.
+    ///
+    /// Source wallets such as `zcashd` store redeem scripts alongside the
+    /// addresses they hash to (e.g. via `cscript` records); preserving them
+    /// during migration is necessary to spend P2SH outputs after import.
+    ///
+    /// # Arguments
+    /// * `redeem_script` - The redeem script bytes to associate with this address
+    pub fn set_redeem_script(&mut self, redeem_script: Script) {
+        self.redeem_script = Some(redeem_script);
+    }
 }
 
 impl From<Address> for Envelope {
@@ -151,6 +186,7 @@ impl From<Address> for Envelope {
             .add_type("TransparentAddress")
             .add_optional_assertion("spend_authority", value.spend_authority)
             .add_optional_assertion("derivation_info", value.derivation_info)
+            .add_optional_assertion("redeem_script", value.redeem_script)
     }
 }
 
@@ -168,10 +204,14 @@ impl TryFrom<Envelope> for Address {
         let derivation_info = envelope
             .try_optional_object_for_predicate("derivation_info")
             .context("derivation_info")?;
+        let redeem_script = envelope
+            .try_optional_object_for_predicate("redeem_script")
+            .context("redeem_script")?;
         Ok(Address {
             address,
             spend_authority,
             derivation_info,
+            redeem_script,
         })
     }
 }
@@ -183,6 +223,7 @@ impl crate::RandomInstance for Address {
             address: String::random(),
             spend_authority: TransparentSpendAuthority::opt_random(),
             derivation_info: DerivationInfo::opt_random(),
+            redeem_script: Script::opt_random(),
         }
     }
 }
@@ -190,7 +231,24 @@ impl crate::RandomInstance for Address {
 #[cfg(test)]
 mod tests {
     use super::Address;
-    use crate::test_envelope_roundtrip;
+    use crate::{Data, Script, test_envelope_roundtrip};
+    use bc_envelope::prelude::*;
 
     test_envelope_roundtrip!(Address);
+
+    #[test]
+    fn redeem_script_roundtrip() {
+        let script_bytes = vec![0x52, 0x21, 0xaa, 0xbb, 0xcc, 0x52, 0xae];
+        let script = Script::from(Data::from_vec(script_bytes.clone()));
+
+        let mut addr = Address::new("t3examplep2shaddress");
+        addr.set_redeem_script(script.clone());
+
+        let envelope: Envelope = addr.clone().into();
+        let recovered = Address::try_from(envelope).expect("envelope round-trip");
+
+        assert_eq!(recovered, addr);
+        let recovered_script = recovered.redeem_script().expect("redeem_script present");
+        assert_eq!(recovered_script.as_ref(), script_bytes.as_slice());
+    }
 }
