@@ -39,6 +39,7 @@ mod_use!(bip_39_mnemonic);
 mod_use!(blob);
 mod_use!(block_hash);
 mod_use!(block_height);
+mod_use!(chain_state);
 mod_use!(data);
 mod_use!(error);
 mod_use!(derivation_info);
