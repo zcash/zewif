@@ -5,6 +5,9 @@ use crate::{
     sprout::SproutSpendingKey, transparent::TransparentSpendingKey,
 };
 
+#[cfg(feature = "encryption")]
+use crate::Error;
+
 /// The sensitive key material of a ZeWIF document, either in plain CBOR or
 /// as an opaque ciphertext.
 ///
@@ -20,6 +23,21 @@ pub enum Secrets {
     /// [`SecretStore`].
     #[n(1)]
     Encrypted(#[n(0)] EncryptedStore),
+}
+
+#[cfg(feature = "encryption")]
+impl Secrets {
+    /// Returns the plain secret store, decrypting an encrypted store with the
+    /// given age identities if necessary.
+    pub fn decrypt<'a>(
+        &self,
+        identities: impl Iterator<Item = &'a dyn age::Identity>,
+    ) -> Result<SecretStore, Error> {
+        match self {
+            Secrets::Plain(store) => Ok(store.clone()),
+            Secrets::Encrypted(encrypted) => encrypted.decrypt(identities),
+        }
+    }
 }
 
 /// An encrypted secret store: an age ciphertext whose plaintext is the CBOR
@@ -38,6 +56,26 @@ impl EncryptedStore {
 
     pub fn ciphertext(&self) -> &Data {
         &self.ciphertext
+    }
+}
+
+#[cfg(feature = "encryption")]
+impl EncryptedStore {
+    /// Decrypts this age ciphertext with the given identities and decodes the
+    /// plaintext as the CBOR encoding of a [`SecretStore`].
+    pub fn decrypt<'a>(
+        &self,
+        identities: impl Iterator<Item = &'a dyn age::Identity>,
+    ) -> Result<SecretStore, Error> {
+        use std::io::Read;
+
+        let decryptor = age::Decryptor::new_buffered(self.ciphertext.as_slice())?;
+        let mut reader = decryptor.decrypt(identities)?;
+        let mut plaintext = Vec::new();
+        reader
+            .read_to_end(&mut plaintext)
+            .map_err(age::DecryptError::from)?;
+        minicbor::decode(&plaintext).map_err(Error::SecretStoreDecode)
     }
 }
 
@@ -104,6 +142,33 @@ impl SecretStore {
 
     pub fn extensions_mut(&mut self) -> &mut Extensions {
         &mut self.extensions
+    }
+}
+
+#[cfg(feature = "encryption")]
+impl SecretStore {
+    /// Encrypts the CBOR encoding of this secret store to the given age
+    /// recipients.
+    ///
+    /// The choice of recipients (passphrase-derived or X25519) is the
+    /// caller's; the document carries only the resulting ciphertext.
+    pub fn encrypt<'a>(
+        &self,
+        recipients: impl Iterator<Item = &'a dyn age::Recipient>,
+    ) -> Result<EncryptedStore, Error> {
+        use std::io::Write;
+
+        let plaintext = minicbor::to_vec(self).expect("encoding to a byte vector cannot fail");
+        let encryptor = age::Encryptor::with_recipients(recipients)?;
+        let mut ciphertext = Vec::new();
+        let mut writer = encryptor
+            .wrap_output(&mut ciphertext)
+            .map_err(age::EncryptError::from)?;
+        writer
+            .write_all(&plaintext)
+            .map_err(age::EncryptError::from)?;
+        writer.finish().map_err(age::EncryptError::from)?;
+        Ok(EncryptedStore::new(Data::from_vec(ciphertext)))
     }
 }
 
@@ -288,4 +353,72 @@ mod tests {
     test_cbor_roundtrip!(TransparentKeyEntry, test_transparent_key_entry);
     test_cbor_roundtrip!(SaplingKeyEntry, test_sapling_key_entry);
     test_cbor_roundtrip!(SproutKeyEntry, test_sprout_key_entry);
+
+    #[cfg(feature = "encryption")]
+    mod encryption {
+        use std::iter;
+
+        use super::super::{
+            EncryptedStore, SaplingKeyEntry, SecretStore, Secrets, SeedEntry, SproutKeyEntry,
+            TransparentKeyEntry,
+        };
+        use crate::{Error, Extensions, RandomInstance};
+
+        /// A secret store containing at least one entry of each kind.
+        fn sample_store() -> SecretStore {
+            let mut store = SecretStore::new();
+            store.add_seed(SeedEntry::random());
+            store.add_transparent_key(TransparentKeyEntry::random());
+            store.add_sapling_key(SaplingKeyEntry::random());
+            store.add_sprout_key(SproutKeyEntry::random());
+            *store.extensions_mut() = Extensions::random();
+            store
+        }
+
+        fn encrypt_to(store: &SecretStore, identity: &age::x25519::Identity) -> EncryptedStore {
+            let recipient = identity.to_public();
+            store
+                .encrypt(iter::once(&recipient as &dyn age::Recipient))
+                .unwrap()
+        }
+
+        #[test]
+        fn encrypt_decrypt_roundtrip() {
+            let store = sample_store();
+            let identity = age::x25519::Identity::generate();
+            let encrypted = encrypt_to(&store, &identity);
+
+            let decrypted = encrypted
+                .decrypt(iter::once(&identity as &dyn age::Identity))
+                .unwrap();
+            assert_eq!(decrypted, store);
+        }
+
+        #[test]
+        fn secrets_decrypt() {
+            let store = sample_store();
+            let identity = age::x25519::Identity::generate();
+
+            let encrypted = Secrets::Encrypted(encrypt_to(&store, &identity));
+            let decrypted = encrypted
+                .decrypt(iter::once(&identity as &dyn age::Identity))
+                .unwrap();
+            assert_eq!(decrypted, store);
+
+            let plain = Secrets::Plain(store.clone());
+            let passed_through = plain.decrypt(iter::empty()).unwrap();
+            assert_eq!(passed_through, store);
+        }
+
+        #[test]
+        fn decrypt_with_wrong_identity_fails() {
+            let store = sample_store();
+            let identity = age::x25519::Identity::generate();
+            let wrong_identity = age::x25519::Identity::generate();
+            let encrypted = encrypt_to(&store, &identity);
+
+            let result = encrypted.decrypt(iter::once(&wrong_identity as &dyn age::Identity));
+            assert!(matches!(result, Err(Error::SecretStoreDecryption(_))));
+        }
+    }
 }

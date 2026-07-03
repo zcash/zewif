@@ -47,6 +47,20 @@ pub enum Error {
     /// The CBOR payload could not be encoded.
     #[error("CBOR encode error: {0}")]
     CborEncode(#[from] minicbor::encode::Error<Infallible>),
+    /// Encryption of a secret store to the requested age recipients failed.
+    #[cfg(feature = "encryption")]
+    #[error("Secret store encryption failed: {0}")]
+    SecretStoreEncryption(#[from] age::EncryptError),
+
+    /// Decryption of an encrypted secret store failed.
+    #[cfg(feature = "encryption")]
+    #[error("Secret store decryption failed: {0}")]
+    SecretStoreDecryption(#[from] age::DecryptError),
+
+    /// The decrypted plaintext was not the CBOR encoding of a secret store.
+    #[cfg(feature = "encryption")]
+    #[error("Secret store decoding failed: {0}")]
+    SecretStoreDecode(#[source] minicbor::decode::Error),
 }
 
 impl From<Infallible> for Error {
