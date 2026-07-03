@@ -27,6 +27,12 @@ impl OrchardWitness {
     }
 }
 
+impl From<IncrementalWitness<ORCHARD_COMMITMENT_TREE_DEPTH, MerkleHashOrchard>> for OrchardWitness {
+    fn from(witness: IncrementalWitness<ORCHARD_COMMITMENT_TREE_DEPTH, MerkleHashOrchard>) -> Self {
+        Self(witness)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{IncrementalWitness, RandomInstance, test_cbor_roundtrip};

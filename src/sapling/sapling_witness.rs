@@ -27,6 +27,12 @@ impl SaplingWitness {
     }
 }
 
+impl From<IncrementalWitness<SAPLING_COMMITMENT_TREE_DEPTH, MerkleHashSapling>> for SaplingWitness {
+    fn from(witness: IncrementalWitness<SAPLING_COMMITMENT_TREE_DEPTH, MerkleHashSapling>) -> Self {
+        Self(witness)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{IncrementalWitness, RandomInstance, test_cbor_roundtrip};
