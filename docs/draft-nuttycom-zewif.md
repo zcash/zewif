@@ -1,0 +1,589 @@
+<pre>
+ZIP: XXX
+Title: ZeWIF: Zcash Wallet Interchange Format
+Owners: Kris Nuttycombe &lt;kris@nutty.land&gt;
+Status: Draft
+Category: Standards / Wallet
+Created: 2026-07-02
+License: MIT
+Discussions-To: &lt;https://github.com/zcash/zewif/issues&gt;
+</pre>
+
+# Terminology
+
+The key words "MUST", "MUST NOT", "SHOULD", "SHOULD NOT", "MAY", and
+"RECOMMENDED" in this document are to be interpreted as described in BCP 14
+[^BCP14] when, and only when, they appear in all capitals.
+
+"ZeWIF document" means a byte sequence conforming to the container format
+defined in this specification. "Exporter" means software producing a ZeWIF
+document from wallet state; "importer" means software consuming one.
+
+# Abstract
+
+This proposal defines ZeWIF, a file format for migrating wallet data between
+Zcash wallet implementations. A ZeWIF document is a single-snapshot archive of
+the state a wallet cannot recover from the block chain alone — key material,
+account structure, address metadata, user annotations — together with optional
+chain-derived data that lets an importing wallet avoid expensive rescanning.
+The format is a deterministic CBOR encoding [^RFC8949] under a normative CDDL
+schema [^RFC8610], with spending-key material segregated into a section that
+can be independently encrypted.
+
+# Motivation
+
+Zcash wallet implementations persist their state in mutually incompatible
+formats. When a wallet reaches end of service (as zcashd has) or a user wishes
+to change wallets, the absence of an interchange format forces ad-hoc pairwise
+migration tools, and data that only the source wallet knows — spending keys
+for legacy addresses, address books, memos and annotations on transactions,
+address-exposure state needed for gap-limit-correct restores — is routinely
+lost.
+
+An interchange format for this purpose has unusual durability requirements: a
+ZeWIF file may be written to offline storage and read decades later, possibly
+after its producing software has disappeared. This motivates the central
+design choices:
+
+- **A widely deployed, standardized encoding.** CBOR is an IETF Internet
+  Standard (STD 94) with independent implementations in every mainstream
+  language, and is self-describing at the data-model level: any generic CBOR
+  tool can decode the structure of a ZeWIF file without this specification in
+  hand.
+- **A normative machine-readable schema.** The CDDL schema in this document is
+  the authoritative definition of the format; the Rust reference
+  implementation conforms to it, not the reverse.
+- **Deterministic encoding.** Writers emit RFC 8949 §4.2 Core Deterministic
+  Encoding, so equal wallet states produce byte-identical documents. This
+  makes round-trip conformance testing exact and documents stable under
+  re-export.
+- **Spending/viewing separability.** All secret key material lives in a single
+  section of the document that may be stored encrypted, so a viewing-only
+  export is obtained by omitting one node, and an at-rest export can protect
+  its secrets without encrypting chain-public data.
+
+# Requirements and non-goals
+
+The format MUST be able to represent the wallet state persisted by
+`zcash_client_sqlite` (the librustzcash reference wallet backend) and the
+state recoverable from a zcashd `wallet.dat`, without loss of any data that is
+not recoverable from the block chain.
+
+The format is a snapshot archive. It is NOT a synchronization protocol, a
+backup-rotation scheme, or an on-chain format. Nothing in this specification
+defines network behavior.
+
+# Specification
+
+## Container format
+
+A ZeWIF document is the concatenation of:
+
+| Bytes | Content |
+|-------|---------|
+| 5     | Magic: the ASCII bytes `ZEWIF` (`0x5A 0x45 0x57 0x49 0x46`) |
+| 4     | Format version, unsigned 32-bit little-endian. This document defines version 1. |
+| rest  | The payload: a single CBOR data item conforming to the `zewif` rule of the schema below. |
+
+Readers MUST reject a document whose magic does not match, and MUST NOT
+attempt to interpret the payload of a document whose version they do not
+implement. Version 1 payloads are not compressed; compression, if ever
+introduced, will be signalled by a new container version.
+
+## CBOR profile
+
+- Writers MUST emit RFC 8949 §4.2 Core Deterministic Encoding: definite
+  lengths everywhere, integers in their shortest form, and map keys sorted in
+  bytewise lexicographic order of their encodings. Readers SHOULD accept any
+  well-formed CBOR that satisfies the schema.
+- Optional record fields are expressed by *omitting* the map entry. Writers
+  MUST NOT encode an absent optional field as CBOR `null`.
+- Readers MUST ignore map keys not defined in the schema version they
+  implement. This is the format's forward-compatibility mechanism.
+- A field index (map key), once assigned a meaning in a published revision of
+  this schema, MUST NOT be reused or assigned a different type. New fields
+  are added under fresh indices.
+- A boolean field documented with a default MUST be omitted by writers when it
+  takes the default value (so that each state has exactly one encoding).
+
+## Structural conventions
+
+The schema uses three shapes, chosen so that every logical state has exactly
+one encoding:
+
+1. **Records** are CBOR maps with small unsigned-integer keys (the COSE/CWT
+   convention [^RFC9052]). The integer registry in the CDDL below maps each
+   index to a field name.
+2. **Enumerations without payload** (network, key scope, account purpose) are
+   bare unsigned integers.
+3. **Tagged unions** (sums-of-products) are two-element arrays
+   `[variant-id, [body?]]`: an unsigned variant identifier followed by an
+   array that is empty for payload-free variants and contains exactly one
+   record for data-bearing variants. Variant identifiers follow the same
+   never-reuse rule as field indices.
+
+Byte sequences are CBOR byte strings (`bstr`); text is UTF-8 (`tstr`). Block
+heights are unsigned integers less than 2^32. Monetary values are unsigned
+integers in zatoshis, at most 2,100,000,000,000,000 (`MAX_MONEY`). Timestamps
+are integer seconds since the Unix epoch.
+
+Where a value has a canonical Zcash encoding — unified addresses and viewing
+keys (ZIP 316 [^ZIP316]), raw transactions, ZIP 32 fingerprints [^ZIP32] —
+ZeWIF stores that encoding verbatim rather than a decomposition, so that
+consumers do not require protocol-library support to carry the data.
+
+## Sensitive material
+
+All secret key material in a ZeWIF document lives in the `secret-store`
+record, referenced from the public wallet structure by public identifiers:
+seeds by their ZIP 32 seed fingerprint, transparent private keys by their
+public key, Sapling spending keys by their full viewing key encoding, and
+Sprout spending keys by their address.
+
+The `secrets` node of the top-level record is either the secret store in
+plain CBOR, or an age ciphertext [^AGE] whose plaintext is the CBOR encoding
+of the secret store. The choice of age recipients (passphrase-derived or
+X25519) is between the exporter and its user; the document carries only the
+ciphertext.
+
+A viewing-only export omits the `secrets` node entirely. Importers MUST treat
+the absence of an expected secret-store entry (e.g. for an address marked as
+having an imported key) as a viewing-only import of the affected item, not as
+an error.
+
+## Schema
+
+The following CDDL is normative. Comments give the field names used by the
+reference implementation.
+
+```cddl
+zewif = {
+  0: [* wallet],                ; wallets
+  1: [* transaction],           ; global transaction table, sorted
+                                ; ascending by txid, unique by txid
+  2: height,                    ; export-height: chain tip at export time
+  3: bytes32,                   ; hash of the block at export-height
+  ? 4: secrets,                 ; sensitive key material (see below)
+  ? 5: bytes32,                 ; export-id: random identifier for this export
+  ? 6: extensions,
+}
+
+wallet = {
+  0: network,
+  1: [* account],
+  2: [* address-book-entry],
+  ? 3: extensions,
+}
+
+network = 0            ; mainnet
+        / 1            ; testnet
+        / 2            ; regtest
+
+account = {
+  0: tstr,                      ; name (may be empty; no uniqueness semantics)
+  1: account-viewing-key,
+  ? 2: key-source,
+  ? 3: height,                  ; birthday-height: first height to scan
+  ? 4: bytes32,                 ; birthday-block: hash of the block at
+                                ; birthday-height
+  ? 5: chain-state,             ; birthday-chain-state: tree state at the end
+                                ; of a block strictly BEFORE birthday-height
+                                ; (canonically the immediately preceding
+                                ; block); scanning begins at the following
+                                ; block
+  ? 6: height,                  ; recover-until-height (exclusive): scanning
+                                ; below this height counts as recovery
+  ? 7: account-purpose,
+  ? 8: tstr,                    ; provenance: free-form key-material origin
+                                ; tag, e.g. "zcashd_mnemonic"
+  9: [* scan-range],            ; fully-scanned ranges
+  10: [* address],
+  11: {* txid => [* received-output]},  ; received outputs by transaction
+  12: {* txid => [* sent-output]},      ; sent outputs by transaction
+  ? 13: extensions,
+}
+
+account-viewing-key = [0, [ufvk]]              ; ZIP 316 UFVK
+                    / [1, [sapling-extfvk]]    ; standalone Sapling extfvk
+                    / [2, [sprout-vk]]         ; Sprout viewing key
+                    / [3, []]                  ; transparent address set
+                                               ; (legacy zcashd)
+
+ufvk           = { 0: tstr }    ; canonical ZIP 316 encoding
+sapling-extfvk = { 0: bstr }    ; canonical extended FVK encoding
+sprout-vk      = { 0: bstr }    ; opaque canonical encoding
+
+key-source = [0, [key-source-derived]]
+           / [1, []]            ; imported
+
+key-source-derived = {
+  0: bytes32,                   ; ZIP 32 seed fingerprint
+  1: uint,                      ; ZIP 32 account index (hardened)
+  ? 2: uint,                    ; zcashd legacy address index (< 2^31); the
+                                ; address-index component of the legacy path
+                                ; m/32h/coin_h/0x7FFFFFFFh/index_h
+}
+
+account-purpose = 0             ; spending: source wallet held spend authority
+                / 1             ; view-only
+
+chain-state = {
+  0: height,                    ; the block whose end-state this describes
+  ? 1: bytes32,                 ; hash of that block
+  ? 2: frontier,                ; Sapling note commitment tree frontier
+  ? 3: frontier,                ; Orchard note commitment tree frontier
+}                               ; future pools: new indices
+
+frontier = [0, []]              ; the tree is empty as of the block
+         / [1, [frontier-data]]
+
+frontier-data = {
+  0: uint,                      ; position: 0-based index of the most
+                                ; recently appended leaf
+  1: bytes32,                   ; that leaf's node value
+  2: [* bytes32],               ; ommers: roots of completed left subtrees,
+                                ; leaf-to-root order; the count is fully
+                                ; determined by position
+}
+
+scan-range = {
+  0: height,                    ; start (inclusive)
+  1: height,                    ; end (inclusive)
+}
+
+address = {
+  0: protocol-address,
+  ? 1: key-scope,
+  ? 2: height,                  ; exposed-at-height: when the address was
+                                ; first exposed to a user or counterparty;
+                                ; not chain-recoverable; absent = never
+                                ; exposed (e.g. zcashd keypool keys)
+  ? 3: extensions,
+}
+
+key-scope = 0                   ; external: user-facing receiving
+          / 1                   ; internal: change/shielding, never exposed
+          / 2                   ; ephemeral: ZIP 320 single-use transparent
+          / 3                   ; foreign: imported standalone key or script
+
+protocol-address = [0, [transparent-address]]
+                 / [1, [sprout-address]]
+                 / [2, [sapling-address]]
+                 / [3, [unified-address]]
+
+transparent-address = {
+  0: tstr,                      ; canonical address string
+  ? 1: transparent-spend-authority,
+  ? 2: bstr,                    ; pubkey (33 or 65 bytes): watch-only
+                                ; imported P2PK/P2PKH; omitted when spend
+                                ; authority is present
+  ? 3: bstr,                    ; redeem-script: watch-only imported P2SH
+}
+
+transparent-spend-authority
+  = [0, [derivation-info]]      ; derived: recoverable from seed
+  / [1, []]                     ; imported: private key, if exported, is in
+                                ; the secret store under this address's pubkey
+
+derivation-info = {
+  0: uint,                      ; change component (0 external, 1 internal,
+                                ; 2 ephemeral)
+  1: uint,                      ; address index (non-hardened)
+}
+
+sprout-address  = { 0: tstr }
+sapling-address = { 0: tstr, ? 1: bytes11 }   ; diversifier index
+unified-address = { 0: tstr, ? 1: bytes11 }   ; diversifier index
+
+transaction = {
+  0: txid,
+  ? 1: transaction-data,
+  ? 2: height,                  ; target-height
+  ? 3: height,                  ; mined-height
+  ? 4: tx-block-position,
+  ? 5: uint,                    ; fee in zatoshis
+  ? 6: height,                  ; expiry-height
+  ? 7: int,                     ; created-time: unix seconds; creation time
+                                ; for wallet-authored transactions, first-
+                                ; observed time otherwise
+  ? 8: bool,                    ; trusted (ZIP 315); default false, omitted
+                                ; when false
+  ? 9: extensions,
+}
+
+transaction-data = [0, [raw-tx-data]]
+                 / [1, [compact-tx-data]]
+
+raw-tx-data = { 0: bstr }       ; canonical Zcash transaction encoding
+
+compact-tx-data = {
+  0: bstr,                      ; protobuf-encoded CompactTx
+  1: tstr,                      ; lightwalletd protocol semver that produced
+                                ; the encoding (the protobuf schema is not
+                                ; self-describing)
+}
+
+tx-block-position = {
+  0: bytes32,                   ; block hash
+  1: uint,                      ; index of the transaction within the block
+}
+
+; Value, memo, change status, and nullifiers are optional enrichment:
+; recoverable from the raw transaction plus the account viewing key. The raw
+; transaction is authoritative where both are present. Exporters SHOULD
+; populate them when raw transaction data is absent.
+received-output = {
+  0: uint,                      ; output-index within the pool's output list
+                                ; (Sprout: 2*joinsplit_index + n, each
+                                ; JoinSplit having exactly two outputs)
+  1: received-output-pool,
+  ? 2: uint,                    ; value in zatoshis
+  ? 3: bstr,                    ; memo (at most 512 bytes)
+  ? 4: bool,                    ; is-change; absent = unknown
+  ? 5: txid,                    ; spent-by
+}
+
+received-output-pool = [0, [transparent-output-data]]
+                     / [1, [sprout-output-data]]
+                     / [2, [sapling-output-data]]
+                     / [3, [orchard-output-data]]
+
+transparent-output-data = {
+  ? 0: bstr,                    ; scriptPubKey, for UTXOs whose containing
+                                ; transaction is unavailable; the raw
+                                ; transaction is authoritative when present
+  ? 1: height,                  ; max-observed-unspent-height
+}
+
+sprout-output-data = {
+  ? 0: bytes32,                 ; nullifier
+}                               ; Sprout spendability is not reconstructible
+                                ; from this data; a Sprout-capable importer
+                                ; must rescan
+
+sapling-output-data = {
+  ? 0: commitment-tree-data,
+  ? 1: bytes32,                 ; nullifier
+}
+
+orchard-output-data = {
+  ? 0: commitment-tree-data,
+  ? 1: bytes32,                 ; nullifier
+}
+
+commitment-tree-data = [0, [tree-position]]
+                     / [1, [incremental-witness]]
+
+tree-position = { 0: uint }     ; 0-based leaf position of the note
+                                ; commitment in its pool's tree
+
+incremental-witness = {
+  0: bytes32,                   ; note commitment
+  1: uint,                      ; note position
+  2: [* bytes32],               ; merkle path, leaf to root
+  3: bytes32,                   ; anchor
+  4: uint,                      ; tree size as of the anchor
+  5: [* bytes32],               ; tree frontier as of the anchor
+}
+
+sent-output = [0, [transparent-sent-output]]
+            / [1, [sapling-sent-output]]
+            / [2, [orchard-sent-output]]
+
+transparent-sent-output = {
+  0: uint,                      ; output-index within the transaction's vout
+  1: tstr,                      ; recipient address, verbatim as used
+  2: uint,                      ; value in zatoshis
+}
+
+sapling-sent-output = {
+  0: uint,                      ; output-index within the Sapling output list
+  1: tstr,                      ; recipient address, verbatim (may be a
+                                ; unified address; not reconstructible from
+                                ; the pool component alone)
+  2: uint,                      ; value in zatoshis
+  ? 3: bstr,                    ; memo
+}
+
+orchard-sent-output = {
+  0: uint,                      ; action index within the Orchard action list
+  1: tstr,                      ; recipient address, verbatim
+  2: uint,                      ; value in zatoshis
+  ? 3: bstr,                    ; memo
+}
+
+address-book-entry = {
+  0: tstr,                      ; address, canonical string (any protocol);
+                                ; may be wallet-owned (recording whom it was
+                                ; given to) or a counterparty address
+  ? 1: tstr,                    ; label (zcashd "name" records)
+  ? 2: tstr,                    ; purpose, e.g. "receive"/"send"/"unknown"
+                                ; (zcashd "purpose" records)
+  ? 3: extensions,
+}
+
+secrets = [0, [secret-store]]   ; plaintext
+        / [1, [encrypted-store]]
+
+encrypted-store = {
+  0: bstr,                      ; age ciphertext; plaintext is the CBOR
+                                ; encoding of a secret-store
+}
+
+secret-store = {
+  0: [* seed-entry],
+  1: [* transparent-key-entry],
+  2: [* sapling-key-entry],
+  3: [* sprout-key-entry],
+  ? 4: extensions,
+}
+
+seed-entry = {
+  0: bytes32,                   ; ZIP 32 seed fingerprint; referenced by
+                                ; key-source-derived entries
+  1: seed-material,
+}
+
+seed-material = [0, [bip39-mnemonic]]
+              / [1, [legacy-seed]]
+
+bip39-mnemonic = {
+  0: tstr,                      ; the mnemonic phrase
+  ? 1: tstr,                    ; language, BCP 47 tag (e.g. "en")
+}
+
+legacy-seed = { 0: bstr }       ; raw pre-mnemonic HD seed bytes
+
+transparent-key-entry = {
+  0: bstr,                      ; secp256k1 public key (33 or 65 bytes)
+  1: bytes32,                   ; private key
+}
+
+sapling-key-entry = {
+  0: bstr,                      ; the canonical encoding of the extended full
+                                ; viewing key this spending key corresponds to
+  1: bstr,                      ; canonical extended spending key encoding
+}
+
+sprout-key-entry = {
+  0: tstr,                      ; Sprout address
+  1: bstr,                      ; Sprout spending key, canonical encoding
+}
+
+; Vendor-namespaced extension data. Vendor identifiers SHOULD be reverse-DNS
+; or another collision-resistant convention. Each value byte string contains
+; a single embedded CBOR data item (the semantics of RFC 8949 tag 24).
+; Re-exporting software MUST preserve extension entries it does not
+; understand.
+extensions = {* tstr => {* tstr => bstr}}
+
+height  = uint .lt 4294967296
+txid    = bytes32
+bytes32 = bstr .size 32
+bytes11 = bstr .size 11
+```
+
+## Schema evolution
+
+A revision of this specification MAY:
+
+- add new optional fields to a record under fresh indices;
+- add new variants to a tagged union under fresh identifiers;
+- add new fields to the container after the version field, by incrementing
+  the container version.
+
+A revision MUST NOT change the type or meaning of an existing index or
+variant identifier, and MUST NOT convert an optional field to required.
+Importers encountering an unknown variant identifier in a tagged union MUST
+NOT misinterpret it; software that re-exports a document it read SHOULD
+preserve unrecognized variants and extension data opaquely, and MUST report
+to its caller any data it drops.
+
+# Rationale
+
+**Why CBOR and CDDL.** The candidate encodings seriously considered were
+CBOR+CDDL, Protocol Buffers, and JSON+JSON-Schema. Protocol Buffers offer the
+strongest field-evolution discipline and are already deployed in the Zcash
+light-client protocol, but a protobuf document is not self-describing (the
+`.proto` is required to recover even the structure), serialization is
+explicitly non-canonical, and code generation imposes toolchain weight on
+every implementation. JSON maximizes ubiquity and eyeball-durability but
+handles the format's pervasive byte strings poorly. CBOR is an IETF Internet
+Standard with a defined deterministic profile and native byte strings, and a
+generic CBOR decoder recovers the full structure of a ZeWIF file without any
+schema in hand.
+
+**Why integer map keys.** Field-name strings would make documents fully
+self-describing, but integer keys with a published registry follow the
+established practice of COSE and CWT, produce materially smaller documents
+(wallet exports repeat record shapes thousands of times), and carry the same
+never-reuse evolution discipline as protobuf field numbers. The CDDL registry
+in this document, which is versioned and published, supplies the names.
+
+**Why `[id, [body]]` unions.** Encoding data-bearing variants with exactly
+one record inside an array gives every variant body a named schema rule,
+keeps the encoding of "no payload" (`[]`) distinct from any record, and — in
+the reference implementation — sidesteps a class of encoder disagreements
+about optional fields embedded directly in variant bodies.
+
+**Prior format.** An earlier iteration of ZeWIF serialized to Gordian
+Envelope (dcbor). That design imported a large dependency stack (223 crates
+locked, including unrelated cryptography) for the reference implementation,
+had no format version marker, and relied on encoding conventions defined
+outside any standards process. No dcbor-based ZeWIF files are known to have
+been produced outside development, so this specification makes a clean break;
+the Envelope layer's useful property — deterministic encoding — is retained
+via RFC 8949 §4.2.
+
+**Why age for secret encryption.** age is a small, well-specified,
+widely-implemented file-encryption format with both passphrase and public-key
+recipients, and is already the at-rest key-material encryption used by zallet
+(the zcashd successor wallet). Embedding an age ciphertext rather than
+defining a bespoke scheme keeps cryptographic agility and audit surface
+outside this specification.
+
+**Enrichment fields.** Data recoverable from a raw transaction plus a viewing
+key (output values, memos, nullifiers, change status) is optional and
+subordinate to the raw transaction. This lets exporters that hold raw
+transactions skip trial decryption, lets compact-data-only wallets export
+what they know, and defines conflict resolution when both are present.
+
+**Witness policy.** Note commitment tree positions plus a per-account
+birthday frontier are sufficient for an importer with chain access to rebuild
+witnesses by scanning forward from the birthday. Full incremental witnesses
+are carried optionally for importers without chain access. Neither is
+required: a rescan-based importer (like zallet's zcashd migration) may ignore
+both.
+
+**No compression in version 1.** Wallet exports are dominated by
+already-compact byte strings; a compression layer adds a decompression
+dependency to every future reader for marginal size benefit. External
+compression of the whole file remains possible without affecting the format.
+
+# Reference implementation
+
+The `zewif` Rust crate (https://github.com/zcash/zewif) implements this
+specification. Implementation notes, non-normative:
+
+- The crate uses `minicbor` with derived codecs; integer field indices in the
+  schema correspond to `#[n(...)]` attributes, records use `#[cbor(map)]`,
+  payload-free enumerations use `#[cbor(index_only)]`, and byte fields use
+  the `minicbor::bytes` wrapper so they encode as `bstr`.
+- Deterministic map-key ordering is obtained by declaring record fields in
+  ascending index order and using ordered collections (sorted arrays keyed
+  by txid) rather than hash maps.
+- Conformance is tested by randomized round-trip tests plus byte-exact
+  re-encoding checks; test vectors are generated from this specification
+  independently of the codec implementation.
+
+# References
+
+[^BCP14]: BCP 14: RFC 2119 and RFC 8174, Key words for use in RFCs.
+[^RFC8949]: RFC 8949: Concise Binary Object Representation (CBOR). STD 94.
+[^RFC8610]: RFC 8610: Concise Data Definition Language (CDDL).
+[^RFC9052]: RFC 9052: CBOR Object Signing and Encryption (COSE): Structures.
+[^ZIP32]: ZIP 32: Shielded Hierarchical Deterministic Wallets.
+[^ZIP315]: ZIP 315: Best Practices for Wallet Handling of Multiple Pools.
+[^ZIP316]: ZIP 316: Unified Addresses and Unified Viewing Keys.
+[^AGE]: age: a simple, modern and secure file encryption format.
+  https://age-encryption.org/v1
