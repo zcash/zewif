@@ -8,6 +8,12 @@ use crate::{
 ///
 /// Pairs the output's index within its pool with pool-specific metadata
 /// and wallet-tracked information such as value, memo, and spending status.
+///
+/// The value, memo, change-status, and nullifier fields are optional
+/// enrichment: they are recoverable from the raw transaction plus the
+/// account's viewing key, so exporters SHOULD include them when the raw
+/// transaction data is absent. Where both are present, the raw transaction
+/// is authoritative.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReceivedOutput {
     /// Index of the output within the appropriate pool's output list
@@ -15,12 +21,13 @@ pub struct ReceivedOutput {
     output_index: u32,
     /// Which pool the output belongs to, with pool-specific metadata.
     pool: ReceivedOutputPool,
-    /// The value of the output in zatoshis.
-    value: Amount,
+    /// The value of the output in zatoshis, if known.
+    value: Option<Amount>,
     /// Memo attached to a shielded output, if any.
     memo: Option<Memo>,
     /// Whether this output is change sent back to the sending account.
-    is_change: bool,
+    /// None means the exporter had no change information.
+    is_change: Option<bool>,
     /// The txid of the transaction that spent this output, if it has been spent.
     spent_by: Option<TxId>,
 }
@@ -114,13 +121,13 @@ pub enum ReceivedOutputPool {
 }
 
 impl ReceivedOutput {
-    pub fn new(output_index: u32, pool: ReceivedOutputPool, value: Amount) -> Self {
+    pub fn new(output_index: u32, pool: ReceivedOutputPool) -> Self {
         Self {
             output_index,
             pool,
-            value,
+            value: None,
             memo: None,
-            is_change: false,
+            is_change: None,
             spent_by: None,
         }
     }
@@ -153,8 +160,12 @@ impl ReceivedOutput {
         }
     }
 
-    pub fn value(&self) -> Amount {
+    pub fn value(&self) -> Option<Amount> {
         self.value
+    }
+
+    pub fn set_value(&mut self, value: Amount) {
+        self.value = Some(value);
     }
 
     pub fn memo(&self) -> Option<&Memo> {
@@ -165,12 +176,14 @@ impl ReceivedOutput {
         self.memo = memo;
     }
 
-    pub fn is_change(&self) -> bool {
+    /// Whether this output is change sent back to the sending account;
+    /// None means the exporter had no change information.
+    pub fn is_change(&self) -> Option<bool> {
         self.is_change
     }
 
     pub fn set_is_change(&mut self, is_change: bool) {
-        self.is_change = is_change;
+        self.is_change = Some(is_change);
     }
 
     pub fn spent_by(&self) -> Option<TxId> {
@@ -186,7 +199,7 @@ impl From<ReceivedOutput> for Envelope {
     fn from(value: ReceivedOutput) -> Self {
         let e = Envelope::new(value.output_index)
             .add_type("ReceivedOutput")
-            .add_assertion("value", value.value);
+            .add_optional_assertion("value", value.value);
         let e = match value.pool {
             ReceivedOutputPool::Transparent {
                 script,
@@ -242,11 +255,7 @@ impl From<ReceivedOutput> for Envelope {
             Some(m) => e.add_assertion("memo", m),
             None => e,
         };
-        let e = if value.is_change {
-            e.add_assertion("is_change", true)
-        } else {
-            e
-        };
+        let e = e.add_optional_assertion("is_change", value.is_change);
         match value.spent_by {
             Some(txid) => e.add_assertion("spent_by", txid),
             None => e,
@@ -260,7 +269,7 @@ impl TryFrom<Envelope> for ReceivedOutput {
     fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
         envelope.check_type("ReceivedOutput")?;
         let output_index: u32 = envelope.extract_subject()?;
-        let value: Amount = envelope.extract_object_for_predicate("value")?;
+        let value: Option<Amount> = envelope.extract_optional_object_for_predicate("value")?;
         let pool_tag: String = envelope.extract_object_for_predicate("pool")?;
         let pool = match pool_tag.as_str() {
             "transparent" => {
@@ -300,9 +309,7 @@ impl TryFrom<Envelope> for ReceivedOutput {
             }
         };
         let memo = envelope.extract_optional_object_for_predicate("memo")?;
-        let is_change = envelope
-            .extract_optional_object_for_predicate::<bool>("is_change")?
-            .unwrap_or(false);
+        let is_change = envelope.extract_optional_object_for_predicate::<bool>("is_change")?;
         let spent_by = envelope.try_optional_object_for_predicate("spent_by")?;
         Ok(Self {
             output_index,
@@ -352,18 +359,23 @@ mod tests {
                 },
                 2 => ReceivedOutputPool::Sapling {
                     tree_data: CommitmentTreeData::opt_random(),
-                    nullifier: Some(Blob::random()),
+                    nullifier: Blob::opt_random(),
                 },
                 _ => ReceivedOutputPool::Orchard {
                     tree_data: CommitmentTreeData::opt_random(),
-                    nullifier: Some(Blob::random()),
+                    nullifier: Blob::opt_random(),
                 },
             };
-            let mut output = ReceivedOutput::new(output_index, pool, Amount::random());
+            let mut output = ReceivedOutput::new(output_index, pool);
+            if let Some(value) = Amount::opt_random() {
+                output.set_value(value);
+            }
             if rng.random_bool(0.5) {
                 output.set_memo(Some(Memo::random()));
             }
-            output.set_is_change(rng.random_bool(0.3));
+            if rng.random_bool(0.6) {
+                output.set_is_change(rng.random_bool(0.5));
+            }
             if rng.random_bool(0.4) {
                 output.set_spent_by(TxId::random());
             }

@@ -429,7 +429,6 @@ mod tests {
                                 script: None,
                                 max_observed_unspent_height: None,
                             },
-                            crate::Amount::random(),
                         )
                     })
                     .collect();
