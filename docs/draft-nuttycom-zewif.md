@@ -122,8 +122,8 @@ one encoding:
 1. **Records** are CBOR maps with small unsigned-integer keys (the COSE/CWT
    convention [^RFC9052]). The integer registry in the CDDL below maps each
    index to a field name.
-2. **Enumerations without payload** (network, key scope, account purpose) are
-   bare unsigned integers.
+2. **Enumerations without payload** (key scope, account purpose) are bare
+   unsigned integers.
 3. **Tagged unions** (sums-of-products) are two-element arrays
    `[variant-id, [body?]]`: an unsigned variant identifier followed by an
    array that is empty for payload-free variants and contains exactly one
@@ -170,10 +170,16 @@ zewif = {
   1: [* transaction],           ; global transaction table, sorted
                                 ; ascending by txid, unique by txid
   2: height,                    ; export-height: chain tip at export time
-  3: bytes32,                   ; hash of the block at export-height
+  3: bytes32,                   ; hash of the block at export-height;
+                                ; advisory — a chain reorganization may
+                                ; orphan this block after export
   ? 4: secrets,                 ; sensitive key material (see below)
   ? 5: bytes32,                 ; export-id: random identifier for this export
   ? 6: extensions,
+  ? 7: tstr,                    ; embedded copy of the CDDL schema for this
+                                ; document's container version, for archival
+                                ; self-description; informative only — the
+                                ; container version remains authoritative
 }
 
 wallet = {
@@ -183,9 +189,21 @@ wallet = {
   ? 3: extensions,
 }
 
-network = 0            ; mainnet
-        / 1            ; testnet
-        / 2            ; regtest
+network = [0, []]                 ; mainnet
+        / [1, []]                 ; testnet
+        / [2, [regtest-params]]   ; regtest
+
+; Regtest networks vary in their network-upgrade activation schedules, and
+; wallet data recorded against one activation schedule is in general
+; incompatible with a chain using another. The activation map makes the
+; network's composition legible to the importer, which SHOULD refuse or
+; flag data whose activation schedule does not match the chain it operates
+; against.
+regtest-params = {
+  0: {* uint => height},        ; consensus branch ID (as defined by ZIP 200
+                                ; and successors) => activation height, for
+                                ; each network upgrade active on the chain
+}
 
 account = {
   0: tstr,                      ; name (may be empty; no uniqueness semantics)
@@ -244,6 +262,10 @@ chain-state = {
 
 frontier = [0, []]              ; the tree is empty as of the block
          / [1, [frontier-data]]
+                                ; a more compact representation — omitting a
+                                ; right-hand leaf in favor of the root of the
+                                ; subtree it completes — may be added as a
+                                ; future variant under a fresh identifier
 
 frontier-data = {
   0: uint,                      ; position: 0-based index of the most
@@ -394,6 +416,11 @@ incremental-witness = {
   5: [* bytes32],               ; tree frontier as of the anchor
 }
 
+; No Sprout variant is defined: Sprout provides no outgoing-viewing-key
+; mechanism by which a sender could later recover its non-change outputs,
+; and zcashd persists no Sprout sent-output metadata (its recipient mapping
+; records apply only to unified-address sends). A wallet that independently
+; tracked such records may carry them as extension data.
 sent-output = [0, [transparent-sent-output]]
             / [1, [sapling-sent-output]]
             / [2, [orchard-sent-output]]
@@ -599,6 +626,7 @@ specification. Implementation notes, non-normative:
 [^RFC8610]: RFC 8610: Concise Data Definition Language (CDDL).
 [^RFC9052]: RFC 9052: CBOR Object Signing and Encryption (COSE): Structures.
 [^ZIP32]: ZIP 32: Shielded Hierarchical Deterministic Wallets.
+[^ZIP200]: ZIP 200: Network Upgrade Mechanism.
 [^ZIP315]: ZIP 315: Best Practices for Wallet Handling of Multiple Pools.
 [^ZIP316]: ZIP 316: Unified Addresses and Unified Viewing Keys.
 [^AGE]: age: a simple, modern and secure file encryption format.
