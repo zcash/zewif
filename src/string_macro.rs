@@ -1,8 +1,10 @@
-/// Creates a new type wrapping a String with common methods and trait implementations.
+/// Creates a new type wrapping a String with common methods and trait
+/// implementations.
 ///
 /// The `string!` macro generates a new type that wraps a Rust `String`,
-/// automatically implementing common methods and traits. This provides a convenient way to
-/// create domain-specific string types with minimal boilerplate.
+/// automatically implementing common methods and traits. This provides a
+/// convenient way to create domain-specific string types with minimal
+/// boilerplate.
 ///
 /// # Usage
 ///
@@ -18,9 +20,9 @@
 ///
 /// # Generated Functionality
 ///
-/// The generated type includes conversions to and from standard Rust string types,
-/// as well as implementations for common traits like `Parse`, `Debug`, `Display`,
-/// `Clone`, `PartialEq`, `Eq`, and `Hash`.
+/// The generated type includes conversions to and from standard Rust string
+/// types, as well as implementations for common traits like `Parse`, `Debug`,
+/// `Display`, `Clone`, `PartialEq`, `Eq`, and `Hash`.
 ///
 /// In the ZeWIF format, this macro is useful for creating strongly-typed
 /// string values such as address labels, wallet notes, purpose strings, and

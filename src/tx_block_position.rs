@@ -57,10 +57,10 @@ impl From<TxBlockPosition> for Envelope {
 }
 
 impl TryFrom<Envelope> for TxBlockPosition {
-    type Error = anyhow::Error;
+    type Error = bc_envelope::Error;
 
-    fn try_from(value: Envelope) -> Result<Self, Self::Error> {
-        value.check_type_envelope("TxBlockPosition")?;
+    fn try_from(value: Envelope) -> bc_envelope::Result<Self> {
+        value.check_type("TxBlockPosition")?;
         value.extract_subject()
     }
 }

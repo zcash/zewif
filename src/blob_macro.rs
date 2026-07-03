@@ -1,8 +1,10 @@
-/// Creates a new type wrapping a fixed-size byte array with common methods and trait implementations.
+/// Creates a new type wrapping a fixed-size byte array with common methods and
+/// trait implementations.
 ///
-/// The `blob!` macro generates a new type that wraps a [`Blob<N>`](crate::Blob) of the specified size,
-/// automatically implementing common methods and traits. This provides a convenient way to
-/// create domain-specific types for fixed-size binary data with minimal boilerplate.
+/// The `blob!` macro generates a new type that wraps a [`Blob<N>`](crate::Blob)
+/// of the specified size, automatically implementing common methods and traits.
+/// This provides a convenient way to create domain-specific types for
+/// fixed-size binary data with minimal boilerplate.
 ///
 /// # Usage
 ///
@@ -14,9 +16,10 @@
 ///
 /// # Generated Functionality
 ///
-/// The generated type includes methods for creation, conversion, and inspection,
-/// as well as implementations for common traits like `Parse`, `Debug`, `Clone`,
-/// and various conversion traits to and from byte collections.
+/// The generated type includes methods for creation, conversion, and
+/// inspection, as well as implementations for common traits like `Parse`,
+/// `Debug`, `Clone`, and various conversion traits to and from byte
+/// collections.
 ///
 /// The macro adds type safety and domain-specific semantics to otherwise
 /// generic byte array data, particularly for cryptographic values used in the
@@ -30,7 +33,8 @@ macro_rules! blob {
         impl $name {
             /// Creates a new instance from a fixed-size byte array.
             ///
-            /// This is the primary constructor when you have an exact-sized array available.
+            /// This is the primary constructor when you have an exact-sized
+            /// array available.
             pub fn new(data: [u8; $size]) -> Self {
                 Self(data)
             }
@@ -44,7 +48,8 @@ macro_rules! blob {
 
             /// Returns `true` if this blob contains no bytes.
             ///
-            /// This will always return `false` for this type (unless `$size` is 0).
+            /// This will always return `false` for this type (unless `$size` is
+            /// 0).
             pub fn is_empty(&self) -> bool {
                 $size != 0
             }
@@ -67,7 +72,8 @@ macro_rules! blob {
             /// Creates an instance from a slice of bytes.
             ///
             /// # Errors
-            /// Returns an error if the slice's length doesn't match the expected size ($size).
+            /// Returns an error if the slice's length doesn't match the
+            /// expected size ($size).
             pub fn from_slice(data: &[u8]) -> Result<Self, std::array::TryFromSliceError> {
                 Ok(Self(<[u8; $size]>::try_from(data)?))
             }
@@ -75,29 +81,32 @@ macro_rules! blob {
             /// Creates an instance from a `Vec<u8>`.
             ///
             /// # Errors
-            /// Returns an error if the vector's length doesn't match the expected size ($size).
+            /// Returns an error if the vector's length doesn't match the
+            /// expected size ($size).
             pub fn from_vec(data: Vec<u8>) -> Result<Self, std::array::TryFromSliceError> {
                 Ok(Self(<[u8; $size]>::try_from(&data[..])?))
             }
 
             /// Parses an instance from a hex string.
-            pub fn from_hex(hex: &str) -> Result<Self, $crate::HexParseError> {
-                let data = hex::decode(hex).map_err(|e| $crate::HexParseError::HexInvalid(e))?;
-                Self::from_vec(data).map_err(|_| $crate::HexParseError::SliceInvalid {
-                    expected: $size * 2,
-                    actual: hex.len(),
+            pub fn from_hex(hex: &str) -> $crate::Result<Self> {
+                let data = hex::decode(hex)?;
+                let data_len = data.len();
+                Self::from_vec(data).map_err(|_| $crate::Error::HexLengthMismatch {
+                    expected: $size,
+                    actual: data_len,
                 })
             }
 
-            /// Parses an instance from a hex string in reversed byte order, such as is used for
-            /// transaction identifiers and block hashes.
-            pub fn from_reversed_hex(hex: &str) -> Result<Self, $crate::HexParseError> {
-                let mut data =
-                    hex::decode(hex).map_err(|e| $crate::HexParseError::HexInvalid(e))?;
+            /// Parses an instance from a hex string in reversed byte order,
+            /// such as is used for transaction identifiers and block
+            /// hashes.
+            pub fn from_reversed_hex(hex: &str) -> $crate::Result<Self> {
+                let mut data = hex::decode(hex)?;
+                let data_len = data.len();
                 data.reverse();
-                Self::from_vec(data).map_err(|_| $crate::HexParseError::SliceInvalid {
-                    expected: $size * 2,
-                    actual: hex.len(),
+                Self::from_vec(data).map_err(|_| $crate::Error::HexLengthMismatch {
+                    expected: $size,
+                    actual: data_len,
                 })
             }
 

@@ -1,8 +1,10 @@
-/// Creates a new type wrapping a variable-size byte array with common methods and trait implementations.
+/// Creates a new type wrapping a variable-size byte array with common methods
+/// and trait implementations.
 ///
-/// The `data!` macro generates a new type that wraps a [`Data`](crate::Data) container,
-/// automatically implementing common methods and traits. This provides a convenient way to
-/// create domain-specific types for variable-length binary data with minimal boilerplate.
+/// The `data!` macro generates a new type that wraps a [`Data`](crate::Data)
+/// container, automatically implementing common methods and traits. This
+/// provides a convenient way to create domain-specific types for
+/// variable-length binary data with minimal boilerplate.
 ///
 /// # Usage
 ///
@@ -10,7 +12,10 @@
 /// # use zewif::data;
 /// #
 /// // Define a type for variable-length script data
-/// data!(ScriptData, "A variable-length script for Zcash transactions.");
+/// data!(
+///     ScriptData,
+///     "A variable-length script for Zcash transactions."
+/// );
 ///
 /// // Use the generated type
 /// let script = ScriptData::new(vec![0xAA, 0xBB, 0xCC]);
@@ -18,13 +23,14 @@
 ///
 /// # Generated Functionality
 ///
-/// The generated type includes methods for creation, conversion, and inspection,
-/// as well as implementations for common traits like `Parse`, `Debug`, `Clone`,
-/// and various conversion traits to and from byte collections.
+/// The generated type includes methods for creation, conversion, and
+/// inspection, as well as implementations for common traits like `Parse`,
+/// `Debug`, `Clone`, and various conversion traits to and from byte
+/// collections.
 ///
-/// This macro is especially useful for creating strong types around Zcash protocol
-/// elements that have variable lengths, such as encrypted memos, scripts, and
-/// other dynamically-sized data.
+/// This macro is especially useful for creating strong types around Zcash
+/// protocol elements that have variable lengths, such as encrypted memos,
+/// scripts, and other dynamically-sized data.
 #[macro_export]
 macro_rules! data {
     ($name:ident, $doc:expr) => {
@@ -34,7 +40,8 @@ macro_rules! data {
         impl $name {
             /// Creates a new instance from a vector of bytes, taking ownership.
             ///
-            /// This is the primary constructor when you have a `Vec<u8>` available.
+            /// This is the primary constructor when you have a `Vec<u8>`
+            /// available.
             pub fn new(data: Vec<u8>) -> Self {
                 Self($crate::Data::from_vec(data))
             }
@@ -44,7 +51,8 @@ macro_rules! data {
                 self.0.len()
             }
 
-            /// Returns `true` if this data container is empty (contains no bytes).
+            /// Returns `true` if this data container is empty (contains no
+            /// bytes).
             pub fn is_empty(&self) -> bool {
                 self.0.is_empty()
             }
@@ -59,7 +67,8 @@ macro_rules! data {
                 Self($crate::Data::from_slice(data))
             }
 
-            /// Creates an instance from a `Vec<u8>`, taking ownership of the vector.
+            /// Creates an instance from a `Vec<u8>`, taking ownership of the
+            /// vector.
             pub fn from_vec(data: Vec<u8>) -> Self {
                 Self($crate::Data::from_vec(data))
             }

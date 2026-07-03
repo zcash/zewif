@@ -1,7 +1,6 @@
 use crate::{DerivationInfo, Script};
 
 use super::TransparentSpendAuthority;
-use anyhow::Context;
 use bc_envelope::prelude::*;
 
 /// A transparent address on the Zcash network.
@@ -191,22 +190,14 @@ impl From<Address> for Envelope {
 }
 
 impl TryFrom<Envelope> for Address {
-    type Error = anyhow::Error;
+    type Error = bc_envelope::Error;
 
-    fn try_from(envelope: Envelope) -> Result<Self, Self::Error> {
-        envelope
-            .check_type_envelope("TransparentAddress")
-            .context("TransparentAddress")?;
-        let address = envelope.extract_subject().context("address")?;
-        let spend_authority = envelope
-            .try_optional_object_for_predicate("spend_authority")
-            .context("spend_authority")?;
-        let derivation_info = envelope
-            .try_optional_object_for_predicate("derivation_info")
-            .context("derivation_info")?;
-        let redeem_script = envelope
-            .try_optional_object_for_predicate("redeem_script")
-            .context("redeem_script")?;
+    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
+        envelope.check_type("TransparentAddress")?;
+        let address = envelope.extract_subject()?;
+        let spend_authority = envelope.try_optional_object_for_predicate("spend_authority")?;
+        let derivation_info = envelope.try_optional_object_for_predicate("derivation_info")?;
+        let redeem_script = envelope.try_optional_object_for_predicate("redeem_script")?;
         Ok(Address {
             address,
             spend_authority,
