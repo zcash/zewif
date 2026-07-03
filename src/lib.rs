@@ -33,6 +33,7 @@ pub mod transparent;
 mod_use!(account);
 mod_use!(account_viewing_key);
 mod_use!(address);
+mod_use!(address_book);
 mod_use!(amount);
 mod_use!(anchor);
 mod_use!(bip_39_mnemonic);

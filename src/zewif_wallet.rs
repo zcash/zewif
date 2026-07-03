@@ -1,17 +1,20 @@
 use super::Network;
 use super::{Account, SeedMaterial};
 use crate::{
-    Indexed, NoQuotesDebugOption, envelope_indexed_objects_for_predicate,
+    AddressBookEntry, Indexed, NoQuotesDebugOption, envelope_indexed_objects_for_predicate,
 };
 use bc_envelope::prelude::*;
 
-/// A Zcash wallet: network context, optional seed material, and accounts.
+/// A Zcash wallet: network context, optional seed material, accounts, and
+/// address book.
 #[derive(Clone, PartialEq)]
 pub struct ZewifWallet {
     index: usize,
     network: Network,
     seed_material: Option<SeedMaterial>,
     accounts: Vec<Account>,
+    /// User-facing metadata about addresses of interest to this wallet.
+    address_book: Vec<AddressBookEntry>,
     attachments: Attachments,
 }
 
@@ -32,6 +35,7 @@ impl std::fmt::Debug for ZewifWallet {
             .field("network", &self.network)
             .field("seed_material", &NoQuotesDebugOption(&self.seed_material))
             .field("accounts", &self.accounts)
+            .field("address_book", &self.address_book)
             .field("attachments", &self.attachments)
             .finish()
     }
@@ -46,6 +50,7 @@ impl ZewifWallet {
             network,
             seed_material: None,
             accounts: Vec::new(),
+            address_book: Vec::new(),
             attachments: Attachments::new(),
         }
     }
@@ -70,6 +75,15 @@ impl ZewifWallet {
         account.set_index(self.accounts.len());
         self.accounts.push(account);
     }
+
+    pub fn address_book(&self) -> &[AddressBookEntry] {
+        &self.address_book
+    }
+
+    pub fn add_address_book_entry(&mut self, mut entry: AddressBookEntry) {
+        entry.set_index(self.address_book.len());
+        self.address_book.push(entry);
+    }
 }
 
 #[rustfmt::skip]
@@ -81,6 +95,7 @@ impl From<ZewifWallet> for Envelope {
             .add_optional_assertion("seed_material", value.seed_material);
 
         e = value.accounts.iter().fold(e, |e, account| e.add_assertion("account", account.clone()));
+        e = value.address_book.iter().fold(e, |e, entry| e.add_assertion("address_book_entry", entry.clone()));
 
         value.attachments.add_to_envelope(e)
     }
@@ -99,6 +114,9 @@ impl TryFrom<Envelope> for ZewifWallet {
         let accounts = envelope_indexed_objects_for_predicate(&envelope, "account")
             .map_err(|e| bc_envelope::Error::General(format!("accounts: {}", e)))?;
 
+        let address_book = envelope_indexed_objects_for_predicate(&envelope, "address_book_entry")
+            .map_err(|e| bc_envelope::Error::General(format!("address_book: {}", e)))?;
+
         let attachments = Attachments::try_from_envelope(&envelope)
             .map_err(|e| bc_envelope::Error::General(format!("attachments: {}", e)))?;
 
@@ -107,6 +125,7 @@ impl TryFrom<Envelope> for ZewifWallet {
             network,
             seed_material,
             accounts,
+            address_book,
             attachments,
         })
     }
@@ -129,6 +148,7 @@ mod tests {
                 network: Network::random(),
                 seed_material: SeedMaterial::opt_random(),
                 accounts: Vec::random().set_indexes(),
+                address_book: Vec::random().set_indexes(),
                 attachments: Attachments::random(),
             }
         }
