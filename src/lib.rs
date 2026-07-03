@@ -44,6 +44,7 @@ mod_use!(error);
 mod_use!(derivation_info);
 mod_use!(incremental_witness);
 mod_use!(indexed);
+mod_use!(key_scope);
 mod_use!(key_source);
 mod_use!(memo);
 mod_use!(mnemonic_language);
