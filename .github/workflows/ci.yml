@@ -18,6 +18,21 @@ jobs:
       - name: Verify working directory is clean
         run: git diff --exit-code
 
+  test-msrv:
+    name: Test on MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install MSRV toolchain
+        run: rustup toolchain install 1.85.1 --profile minimal
+      # --locked: the committed Cargo.lock is the MSRV-compatible resolution
+      # of the dependency tree; a fresh resolution may select newer releases
+      # that require a later rustc.
+      - name: Run tests
+        run: cargo +1.85.1 test --all-features --verbose --workspace --locked
+
   bitrot:
     name: Bitrot check
     runs-on: ubuntu-latest

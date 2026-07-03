@@ -5,6 +5,9 @@ edition = "2024"
 license = "MIT or Apache 2.0"
 
 [dependencies]
+# Version bumps of minicbor are format-affecting changes, permitted only when
+# the golden/conformance tests still pass. (minicbor 2.x's derive requires
+# Rust >= 1.88 and is blocked by the 1.85.1 MSRV regardless.)
 minicbor = { version = "1", features = ["derive", "std"] }
 
 thiserror = "^2.0"
