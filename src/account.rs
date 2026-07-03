@@ -1,5 +1,5 @@
 use bc_envelope::prelude::*;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::{
     AccountViewingKey, Address, BlockHash, BlockHeight, ChainState, Indexed, KeySource,
@@ -74,11 +74,11 @@ pub struct Account {
     addresses: Vec<Address>,
 
     /// Maps transaction IDs to the received outputs relevant to this account.
-    relevant_transactions: HashMap<TxId, Vec<ReceivedOutput>>,
+    relevant_transactions: BTreeMap<TxId, Vec<ReceivedOutput>>,
 
     /// Sent output metadata not recoverable from the chain, grouped by
     /// the transaction that created them.
-    sent_outputs: HashMap<TxId, Vec<SentOutput>>,
+    sent_outputs: BTreeMap<TxId, Vec<SentOutput>>,
 
     attachments: Attachments,
 }
@@ -144,8 +144,8 @@ impl Account {
             provenance: None,
             scanned_ranges: Vec::new(),
             addresses: Vec::new(),
-            relevant_transactions: HashMap::new(),
-            sent_outputs: HashMap::new(),
+            relevant_transactions: BTreeMap::new(),
+            sent_outputs: BTreeMap::new(),
             attachments: Attachments::new(),
         }
     }
@@ -235,7 +235,7 @@ impl Account {
         self.addresses.push(address);
     }
 
-    pub fn relevant_transactions(&self) -> &HashMap<TxId, Vec<ReceivedOutput>> {
+    pub fn relevant_transactions(&self) -> &BTreeMap<TxId, Vec<ReceivedOutput>> {
         &self.relevant_transactions
     }
 
@@ -243,7 +243,7 @@ impl Account {
         self.relevant_transactions.insert(txid, outputs);
     }
 
-    pub fn sent_outputs(&self) -> &HashMap<TxId, Vec<SentOutput>> {
+    pub fn sent_outputs(&self) -> &BTreeMap<TxId, Vec<SentOutput>> {
         &self.sent_outputs
     }
 
@@ -349,7 +349,7 @@ impl TryFrom<Envelope> for Account {
             .map_err(|e| bc_envelope::Error::General(format!("addresses: {}", e)))?;
 
         // Deserialize relevant_transactions
-        let mut relevant_transactions = HashMap::new();
+        let mut relevant_transactions = BTreeMap::new();
         for tx_env in envelope.objects_for_predicate("relevant_transaction") {
             tx_env.check_type("RelevantTransaction")?;
             let txid: TxId = tx_env.extract_subject()?;
@@ -359,7 +359,7 @@ impl TryFrom<Envelope> for Account {
         }
 
         // Deserialize sent_outputs
-        let mut sent_outputs = HashMap::new();
+        let mut sent_outputs = BTreeMap::new();
         for tx_env in envelope.objects_for_predicate("sent_transaction") {
             tx_env.check_type("SentTransaction")?;
             let txid: TxId = tx_env.extract_subject()?;
@@ -393,7 +393,7 @@ impl TryFrom<Envelope> for Account {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::collections::BTreeMap;
 
     use bc_envelope::Attachments;
 
@@ -422,7 +422,7 @@ mod tests {
 
             let mut rng = rand::rng();
             let num_txs = rng.random_range(0..3usize);
-            let mut relevant_transactions = HashMap::new();
+            let mut relevant_transactions = BTreeMap::new();
             for _ in 0..num_txs {
                 let txid = TxId::random();
                 let num_outputs = rng.random_range(1..4usize);
@@ -441,7 +441,7 @@ mod tests {
             }
 
             let num_sent_txs = rng.random_range(0..3usize);
-            let mut sent_outputs = HashMap::new();
+            let mut sent_outputs = BTreeMap::new();
             for _ in 0..num_sent_txs {
                 let txid = TxId::random();
                 let num_outputs = rng.random_range(1..3usize);

@@ -1,6 +1,6 @@
 use bc_components::ARID;
 use bc_envelope::prelude::*;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::{envelope_indexed_objects_for_predicate, BlockHash, BlockHeight, Indexed};
 
@@ -14,7 +14,7 @@ use super::{Transaction, TxId, ZewifWallet};
 pub struct Zewif {
     id: ARID,
     wallets: Vec<ZewifWallet>,
-    transactions: HashMap<TxId, Transaction>,
+    transactions: BTreeMap<TxId, Transaction>,
     export_height: BlockHeight,
     export_height_block_hash: BlockHash,
     attachments: Attachments,
@@ -27,7 +27,7 @@ impl Zewif {
         Self {
             id: ARID::new(),
             wallets: Vec::new(),
-            transactions: HashMap::new(),
+            transactions: BTreeMap::new(),
             export_height,
             export_height_block_hash,
             attachments: Attachments::new(),
@@ -51,7 +51,7 @@ impl Zewif {
         self.wallets.push(wallet);
     }
 
-    pub fn transactions(&self) -> &HashMap<TxId, Transaction> {
+    pub fn transactions(&self) -> &BTreeMap<TxId, Transaction> {
         &self.transactions
     }
 
@@ -63,7 +63,7 @@ impl Zewif {
         self.transactions.get(&txid)
     }
 
-    pub fn set_transactions(&mut self, transactions: HashMap<TxId, Transaction>) {
+    pub fn set_transactions(&mut self, transactions: BTreeMap<TxId, Transaction>) {
         self.transactions = transactions;
     }
 
