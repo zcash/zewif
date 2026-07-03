@@ -2,10 +2,8 @@ use bc_envelope::prelude::*;
 use std::collections::HashMap;
 
 use crate::{
-    envelope_indexed_objects_for_predicate,
-    AccountViewingKey, Address, BlockHash, BlockHeight,
-    Indexed, KeySource, ReceivedOutput,
-    ScanRange, SentOutput, TxId,
+    AccountViewingKey, Address, BlockHash, BlockHeight, ChainState, Indexed, KeySource,
+    ReceivedOutput, ScanRange, SentOutput, TxId, envelope_indexed_objects_for_predicate,
 };
 
 /// A logical grouping of funds, addresses, and transaction history.
@@ -47,6 +45,24 @@ pub struct Account {
     /// Hash of the birthday block, for chain verification.
     birthday_block: Option<BlockHash>,
 
+    /// Tree state at a block at or before `birthday_height` from which
+    /// scanning may begin (maps to librustzcash `AccountBirthday`
+    /// prior_chain_state). Exporters without chain access omit it.
+    birthday_chain_state: Option<ChainState>,
+
+    /// Height below which recovery of this account's history is considered
+    /// complete (maps to zcash_client_sqlite accounts.recover_until_height).
+    recover_until_height: Option<BlockHeight>,
+
+    /// The capability of the account in the source wallet; `None` = unknown.
+    purpose: Option<AccountPurpose>,
+
+    /// Free-form tag identifying the origin of the account's key material,
+    /// e.g. "zcashd_mnemonic" (maps to zcash_client_sqlite
+    /// accounts.key_source; named provenance here because zewif uses
+    /// `KeySource` for the structured enum).
+    provenance: Option<String>,
+
     /// Block ranges that have been fully scanned for this account.
     scanned_ranges: Vec<ScanRange>,
 
@@ -62,6 +78,17 @@ pub struct Account {
     attachments: Attachments,
 }
 
+/// The capability of an account in the source wallet (maps to
+/// zcash_client_backend `AccountPurpose`).
+///
+/// `ViewOnly` indicates the account was imported without spend authority;
+/// a `None` value of a containing `Option` means the purpose is unknown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AccountPurpose {
+    Spending,
+    ViewOnly,
+}
+
 #[rustfmt::skip]
 impl std::fmt::Debug for Account {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -72,6 +99,10 @@ impl std::fmt::Debug for Account {
             .field("key_source", &self.key_source)
             .field("birthday_height", &self.birthday_height)
             .field("birthday_block", &self.birthday_block)
+            .field("birthday_chain_state", &self.birthday_chain_state)
+            .field("recover_until_height", &self.recover_until_height)
+            .field("purpose", &self.purpose)
+            .field("provenance", &self.provenance)
             .field("scanned_ranges", &self.scanned_ranges)
             .field("addresses", &self.addresses)
             .field("relevant_transactions", &self.relevant_transactions)
@@ -102,6 +133,10 @@ impl Account {
             key_source: None,
             birthday_height: None,
             birthday_block: None,
+            birthday_chain_state: None,
+            recover_until_height: None,
+            purpose: None,
+            provenance: None,
             scanned_ranges: Vec::new(),
             addresses: Vec::new(),
             relevant_transactions: HashMap::new(),
@@ -144,6 +179,38 @@ impl Account {
 
     pub fn set_birthday_block(&mut self, hash: BlockHash) {
         self.birthday_block = Some(hash);
+    }
+
+    pub fn birthday_chain_state(&self) -> Option<&ChainState> {
+        self.birthday_chain_state.as_ref()
+    }
+
+    pub fn set_birthday_chain_state(&mut self, chain_state: ChainState) {
+        self.birthday_chain_state = Some(chain_state);
+    }
+
+    pub fn recover_until_height(&self) -> Option<BlockHeight> {
+        self.recover_until_height
+    }
+
+    pub fn set_recover_until_height(&mut self, height: BlockHeight) {
+        self.recover_until_height = Some(height);
+    }
+
+    pub fn purpose(&self) -> Option<AccountPurpose> {
+        self.purpose
+    }
+
+    pub fn set_purpose(&mut self, purpose: AccountPurpose) {
+        self.purpose = Some(purpose);
+    }
+
+    pub fn provenance(&self) -> Option<&str> {
+        self.provenance.as_deref()
+    }
+
+    pub fn set_provenance(&mut self, provenance: impl Into<String>) {
+        self.provenance = Some(provenance.into());
     }
 
     pub fn scanned_ranges(&self) -> &[ScanRange] {
@@ -203,7 +270,14 @@ impl From<Account> for Envelope {
             .add_assertion("viewing_key", value.viewing_key)
             .add_optional_assertion("key_source", value.key_source)
             .add_optional_assertion("birthday_height", value.birthday_height)
-            .add_optional_assertion("birthday_block", value.birthday_block);
+            .add_optional_assertion("birthday_block", value.birthday_block)
+            .add_optional_assertion("birthday_chain_state", value.birthday_chain_state)
+            .add_optional_assertion("recover_until_height", value.recover_until_height)
+            .add_optional_assertion("purpose", value.purpose.map(|purpose| match purpose {
+                AccountPurpose::Spending => "spending",
+                AccountPurpose::ViewOnly => "view_only",
+            }))
+            .add_optional_assertion("provenance", value.provenance);
 
         e = value.scanned_ranges.iter().fold(e, |e, range| e.add_assertion("scanned_range", *range));
         e = value.addresses.iter().fold(e, |e, address| e.add_assertion("address", address.clone()));
@@ -243,9 +317,27 @@ impl TryFrom<Envelope> for Account {
         let key_source = envelope.try_optional_object_for_predicate("key_source")?;
         let birthday_height = envelope.extract_optional_object_for_predicate("birthday_height")?;
         let birthday_block = envelope.extract_optional_object_for_predicate("birthday_block")?;
+        let birthday_chain_state =
+            envelope.try_optional_object_for_predicate("birthday_chain_state")?;
+        let recover_until_height =
+            envelope.extract_optional_object_for_predicate("recover_until_height")?;
+        let purpose = match envelope.extract_optional_object_for_predicate::<String>("purpose")? {
+            None => None,
+            Some(s) => match s.as_str() {
+                "spending" => Some(AccountPurpose::Spending),
+                "view_only" => Some(AccountPurpose::ViewOnly),
+                other => {
+                    return Err(bc_envelope::Error::General(format!(
+                        "unknown AccountPurpose: {}",
+                        other
+                    )));
+                }
+            },
+        };
+        let provenance = envelope.extract_optional_object_for_predicate("provenance")?;
 
-        let mut scanned_ranges: Vec<ScanRange> = envelope
-            .try_objects_for_predicate("scanned_range")?;
+        let mut scanned_ranges: Vec<ScanRange> =
+            envelope.try_objects_for_predicate("scanned_range")?;
         scanned_ranges.sort_by_key(|r| r.start());
 
         let addresses = envelope_indexed_objects_for_predicate(&envelope, "address")
@@ -256,8 +348,7 @@ impl TryFrom<Envelope> for Account {
         for tx_env in envelope.objects_for_predicate("relevant_transaction") {
             tx_env.check_type("RelevantTransaction")?;
             let txid: TxId = tx_env.extract_subject()?;
-            let mut outputs: Vec<ReceivedOutput> = tx_env
-                .try_objects_for_predicate("output")?;
+            let mut outputs: Vec<ReceivedOutput> = tx_env.try_objects_for_predicate("output")?;
             outputs.sort_by_key(|o| o.output_index());
             relevant_transactions.insert(txid, outputs);
         }
@@ -267,8 +358,7 @@ impl TryFrom<Envelope> for Account {
         for tx_env in envelope.objects_for_predicate("sent_transaction") {
             tx_env.check_type("SentTransaction")?;
             let txid: TxId = tx_env.extract_subject()?;
-            let mut outputs: Vec<SentOutput> = tx_env
-                .try_objects_for_predicate("sent_output")?;
+            let mut outputs: Vec<SentOutput> = tx_env.try_objects_for_predicate("sent_output")?;
             outputs.sort_by_key(|o| o.index());
             sent_outputs.insert(txid, outputs);
         }
@@ -283,6 +373,10 @@ impl TryFrom<Envelope> for Account {
             key_source,
             birthday_height,
             birthday_block,
+            birthday_chain_state,
+            recover_until_height,
+            purpose,
+            provenance,
             scanned_ranges,
             addresses,
             relevant_transactions,
@@ -299,11 +393,22 @@ mod tests {
     use bc_envelope::Attachments;
 
     use crate::{
-        test_envelope_roundtrip, AccountViewingKey, BlockHash, BlockHeight,
-        KeySource, ReceivedOutput, ScanRange, SentOutput, TxId,
+        AccountViewingKey, BlockHash, BlockHeight, ChainState, KeySource, ReceivedOutput,
+        ScanRange, SentOutput, TxId, test_envelope_roundtrip,
     };
 
-    use super::Account;
+    use super::{Account, AccountPurpose};
+
+    impl crate::RandomInstance for AccountPurpose {
+        fn random() -> Self {
+            let mut rng = rand::rng();
+            if rand::Rng::random_bool(&mut rng, 0.5) {
+                AccountPurpose::Spending
+            } else {
+                AccountPurpose::ViewOnly
+            }
+        }
+    }
 
     impl crate::RandomInstance for Account {
         fn random() -> Self {
@@ -317,7 +422,13 @@ mod tests {
                 let txid = TxId::random();
                 let num_outputs = rng.random_range(1..4usize);
                 let outputs: Vec<ReceivedOutput> = (0..num_outputs)
-                    .map(|i| ReceivedOutput::new(i as u32, crate::ReceivedOutputPool::Transparent, crate::Amount::random()))
+                    .map(|i| {
+                        ReceivedOutput::new(
+                            i as u32,
+                            crate::ReceivedOutputPool::Transparent,
+                            crate::Amount::random(),
+                        )
+                    })
                     .collect();
                 relevant_transactions.insert(txid, outputs);
             }
@@ -339,9 +450,8 @@ mod tests {
             }
 
             let num_ranges = rng.random_range(0..3usize);
-            let mut scanned_ranges: Vec<ScanRange> = (0..num_ranges)
-                .map(|_| ScanRange::random())
-                .collect();
+            let mut scanned_ranges: Vec<ScanRange> =
+                (0..num_ranges).map(|_| ScanRange::random()).collect();
             scanned_ranges.sort_by_key(|r| r.start());
 
             Self {
@@ -351,6 +461,10 @@ mod tests {
                 key_source: KeySource::opt_random(),
                 birthday_height: BlockHeight::opt_random(),
                 birthday_block: BlockHash::opt_random(),
+                birthday_chain_state: ChainState::opt_random(),
+                recover_until_height: BlockHeight::opt_random(),
+                purpose: AccountPurpose::opt_random(),
+                provenance: String::opt_random(),
                 scanned_ranges,
                 addresses: Vec::random().set_indexes(),
                 relevant_transactions,
