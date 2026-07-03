@@ -24,6 +24,29 @@ pub enum Error {
 
     #[error("Slice conversion error: {0}")]
     TryFromSliceError(#[from] TryFromSliceError),
+
+    // Container format errors
+    /// The document does not begin with the ZeWIF magic bytes.
+    #[error("Not a ZeWIF document: bad magic bytes")]
+    BadMagic,
+
+    /// The document ends before the end of the fixed-size container header;
+    /// carries the number of bytes present.
+    #[error("Truncated ZeWIF container header: {0} bytes")]
+    TruncatedHeader(usize),
+
+    /// The document declares a container version that this crate does not
+    /// implement; carries the declared version.
+    #[error("Unsupported ZeWIF container version: {0}")]
+    UnsupportedVersion(u32),
+
+    /// The CBOR payload could not be decoded.
+    #[error("CBOR decode error: {0}")]
+    CborDecode(#[from] minicbor::decode::Error),
+
+    /// The CBOR payload could not be encoded.
+    #[error("CBOR encode error: {0}")]
+    CborEncode(#[from] minicbor::encode::Error<Infallible>),
 }
 
 impl From<Infallible> for Error {

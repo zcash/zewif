@@ -14,11 +14,11 @@
 //!
 //! ## Serialization
 //!
-//! Types serialize to deterministic CBOR via [`minicbor`] (`minicbor::to_vec`
-//! / `minicbor::decode`), conforming to the CDDL schema in
-//! `docs/draft-nuttycom-zewif.md`. The ZeWIF container framing (magic bytes
-//! and format version) around the CBOR payload is not yet provided by this
-//! crate.
+//! A ZeWIF document is written and read with [`Zewif::to_bytes`] and
+//! [`Zewif::from_bytes`]: the [`MAGIC_BYTES`] and a little-endian format
+//! version ([`ZEWIF_VERSION_1`]) followed by the deterministic CBOR payload,
+//! conforming to the CDDL schema in `docs/draft-nuttycom-zewif.md`.
+//! Individual types encode and decode via [`minicbor`].
 
 // Macros
 mod blob_macro;
@@ -49,6 +49,7 @@ mod_use!(blob);
 mod_use!(block_hash);
 mod_use!(block_height);
 mod_use!(chain_state);
+mod_use!(container);
 mod_use!(data);
 mod_use!(error);
 mod_use!(derivation_info);

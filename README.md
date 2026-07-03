@@ -145,11 +145,13 @@ Encoding) under the normative CDDL schema in
 [`docs/draft-nuttycom-zewif.md`](docs/draft-nuttycom-zewif.md). Records are
 CBOR maps with small integer keys (the COSE/CWT convention), enumerations
 without payload are bare unsigned integers, and tagged unions are
-`[variant-id, [body?]]` arrays. Types encode and decode via
-[`minicbor`](https://crates.io/crates/minicbor) (`minicbor::to_vec` /
-`minicbor::decode`); the container framing (magic bytes and format version)
-around the CBOR payload is defined by the specification but not yet provided
-by this crate.
+`[variant-id, [body?]]` arrays. Individual types encode and decode via
+[`minicbor`](https://crates.io/crates/minicbor). A complete ZeWIF document is
+written and read with `Zewif::to_bytes` / `Zewif::from_bytes`, which frame the
+CBOR payload with the container header defined by the specification: the ASCII
+magic bytes `ZEWIF` followed by an unsigned 32-bit little-endian format
+version (currently 1). Documents with unrecognized magic bytes or an
+unsupported version are rejected without any payload interpretation.
 
 This structure provides:
 
