@@ -52,6 +52,7 @@ mod_use!(non_hardened_child_index);
 mod_use!(protocol_address);
 mod_use!(received_output);
 mod_use!(scan_range);
+mod_use!(sent_output);
 mod_use!(script);
 mod_use!(legacy_seed);
 mod_use!(seed_material);

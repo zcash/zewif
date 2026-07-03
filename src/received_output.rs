@@ -3,12 +3,13 @@ use bc_envelope::prelude::*;
 use crate::{
     orchard::OrchardWitness,
     sapling::SaplingWitness,
+    Amount, Blob, Memo, TxId,
 };
 
 /// A received output within a transaction that belongs to an account.
 ///
 /// Pairs the output's index within its pool with pool-specific metadata
-/// (currently just an optional witness for shielded outputs).
+/// and wallet-tracked information such as value, memo, and spending status.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReceivedOutput {
     /// Index of the output within the appropriate pool's output list
@@ -16,6 +17,14 @@ pub struct ReceivedOutput {
     output_index: u32,
     /// Which pool the output belongs to, with pool-specific metadata.
     pool: ReceivedOutputPool,
+    /// The value of the output in zatoshis.
+    value: Amount,
+    /// Memo attached to a shielded output, if any.
+    memo: Option<Memo>,
+    /// Whether this output is change sent back to the sending account.
+    is_change: bool,
+    /// The txid of the transaction that spent this output, if it has been spent.
+    spent_by: Option<TxId>,
 }
 
 /// Identifies which pool a received output belongs to and carries
@@ -23,13 +32,26 @@ pub struct ReceivedOutput {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReceivedOutputPool {
     Transparent,
-    Sapling { witness: Option<SaplingWitness> },
-    Orchard { witness: Option<OrchardWitness> },
+    Sapling {
+        witness: Option<SaplingWitness>,
+        nullifier: Option<Blob<32>>,
+    },
+    Orchard {
+        witness: Option<OrchardWitness>,
+        nullifier: Option<Blob<32>>,
+    },
 }
 
 impl ReceivedOutput {
-    pub fn new(output_index: u32, pool: ReceivedOutputPool) -> Self {
-        Self { output_index, pool }
+    pub fn new(output_index: u32, pool: ReceivedOutputPool, value: Amount) -> Self {
+        Self {
+            output_index,
+            pool,
+            value,
+            memo: None,
+            is_change: false,
+            spent_by: None,
+        }
     }
 
     pub fn output_index(&self) -> u32 {
@@ -39,30 +61,80 @@ impl ReceivedOutput {
     pub fn pool(&self) -> &ReceivedOutputPool {
         &self.pool
     }
+
+    pub fn value(&self) -> Amount {
+        self.value
+    }
+
+    pub fn memo(&self) -> Option<&Memo> {
+        self.memo.as_ref()
+    }
+
+    pub fn set_memo(&mut self, memo: Option<Memo>) {
+        self.memo = memo;
+    }
+
+    pub fn is_change(&self) -> bool {
+        self.is_change
+    }
+
+    pub fn set_is_change(&mut self, is_change: bool) {
+        self.is_change = is_change;
+    }
+
+    pub fn spent_by(&self) -> Option<TxId> {
+        self.spent_by
+    }
+
+    pub fn set_spent_by(&mut self, txid: TxId) {
+        self.spent_by = Some(txid);
+    }
 }
 
 impl From<ReceivedOutput> for Envelope {
     fn from(value: ReceivedOutput) -> Self {
         let e = Envelope::new(value.output_index)
-            .add_type("ReceivedOutput");
-        match value.pool {
+            .add_type("ReceivedOutput")
+            .add_assertion("value", value.value);
+        let e = match value.pool {
             ReceivedOutputPool::Transparent => {
                 e.add_assertion("pool", "transparent")
             }
-            ReceivedOutputPool::Sapling { witness } => {
+            ReceivedOutputPool::Sapling { witness, nullifier } => {
                 let e = e.add_assertion("pool", "sapling");
-                match witness {
+                let e = match witness {
                     Some(w) => e.add_assertion("witness", w),
+                    None => e,
+                };
+                match nullifier {
+                    Some(nf) => e.add_assertion("nullifier", nf),
                     None => e,
                 }
             }
-            ReceivedOutputPool::Orchard { witness } => {
+            ReceivedOutputPool::Orchard { witness, nullifier } => {
                 let e = e.add_assertion("pool", "orchard");
-                match witness {
+                let e = match witness {
                     Some(w) => e.add_assertion("witness", w),
+                    None => e,
+                };
+                match nullifier {
+                    Some(nf) => e.add_assertion("nullifier", nf),
                     None => e,
                 }
             }
+        };
+        let e = match value.memo {
+            Some(m) => e.add_assertion("memo", m),
+            None => e,
+        };
+        let e = if value.is_change {
+            e.add_assertion("is_change", true)
+        } else {
+            e
+        };
+        match value.spent_by {
+            Some(txid) => e.add_assertion("spent_by", txid),
+            None => e,
         }
     }
 }
@@ -73,16 +145,19 @@ impl TryFrom<Envelope> for ReceivedOutput {
     fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
         envelope.check_type("ReceivedOutput")?;
         let output_index: u32 = envelope.extract_subject()?;
+        let value: Amount = envelope.extract_object_for_predicate("value")?;
         let pool_tag: String = envelope.extract_object_for_predicate("pool")?;
         let pool = match pool_tag.as_str() {
             "transparent" => ReceivedOutputPool::Transparent,
             "sapling" => {
                 let witness = envelope.try_optional_object_for_predicate("witness")?;
-                ReceivedOutputPool::Sapling { witness }
+                let nullifier = envelope.try_optional_object_for_predicate("nullifier")?;
+                ReceivedOutputPool::Sapling { witness, nullifier }
             }
             "orchard" => {
                 let witness = envelope.try_optional_object_for_predicate("witness")?;
-                ReceivedOutputPool::Orchard { witness }
+                let nullifier = envelope.try_optional_object_for_predicate("nullifier")?;
+                ReceivedOutputPool::Orchard { witness, nullifier }
             }
             other => {
                 return Err(bc_envelope::Error::General(
@@ -90,7 +165,11 @@ impl TryFrom<Envelope> for ReceivedOutput {
                 ));
             }
         };
-        Ok(Self { output_index, pool })
+        let memo = envelope.extract_optional_object_for_predicate("memo")?;
+        let is_change = envelope.extract_optional_object_for_predicate::<bool>("is_change")?
+            .unwrap_or(false);
+        let spent_by = envelope.try_optional_object_for_predicate("spent_by")?;
+        Ok(Self { output_index, pool, value, memo, is_change, spent_by })
     }
 }
 
@@ -99,6 +178,7 @@ mod tests {
     use crate::test_envelope_roundtrip;
 
     use super::{ReceivedOutput, ReceivedOutputPool};
+    use crate::{Amount, Blob, Memo, TxId};
 
     impl crate::RandomInstance for ReceivedOutput {
         fn random() -> Self {
@@ -109,12 +189,22 @@ mod tests {
                 0 => ReceivedOutputPool::Transparent,
                 1 => ReceivedOutputPool::Sapling {
                     witness: crate::sapling::SaplingWitness::opt_random(),
+                    nullifier: Some(Blob::random()),
                 },
                 _ => ReceivedOutputPool::Orchard {
                     witness: crate::orchard::OrchardWitness::opt_random(),
+                    nullifier: Some(Blob::random()),
                 },
             };
-            ReceivedOutput::new(output_index, pool)
+            let mut output = ReceivedOutput::new(output_index, pool, Amount::random());
+            if rng.random_bool(0.5) {
+                output.set_memo(Some(Memo::random()));
+            }
+            output.set_is_change(rng.random_bool(0.3));
+            if rng.random_bool(0.4) {
+                output.set_spent_by(TxId::random());
+            }
+            output
         }
     }
 

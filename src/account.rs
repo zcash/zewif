@@ -3,11 +3,9 @@ use std::collections::HashMap;
 
 use crate::{
     envelope_indexed_objects_for_predicate,
-    orchard::OrchardSentOutput,
-    sapling::SaplingSentOutput,
     AccountViewingKey, Address, BlockHash, BlockHeight,
     Indexed, KeySource, ReceivedOutput,
-    ScanRange, TxId,
+    ScanRange, SentOutput, TxId,
 };
 
 /// A logical grouping of funds, addresses, and transaction history.
@@ -57,9 +55,10 @@ pub struct Account {
     /// Maps transaction IDs to the received outputs relevant to this account.
     relevant_transactions: HashMap<TxId, Vec<ReceivedOutput>>,
 
-    /// Sent output metadata not recoverable from the chain.
-    sapling_sent_outputs: Vec<SaplingSentOutput>,
-    orchard_sent_outputs: Vec<OrchardSentOutput>,
+    /// Sent output metadata not recoverable from the chain, grouped by
+    /// the transaction that created them.
+    sent_outputs: HashMap<TxId, Vec<SentOutput>>,
+
     attachments: Attachments,
 }
 
@@ -76,8 +75,7 @@ impl std::fmt::Debug for Account {
             .field("scanned_ranges", &self.scanned_ranges)
             .field("addresses", &self.addresses)
             .field("relevant_transactions", &self.relevant_transactions)
-            .field("sapling_sent_outputs", &self.sapling_sent_outputs)
-            .field("orchard_sent_outputs", &self.orchard_sent_outputs)
+            .field("sent_outputs", &self.sent_outputs)
             .field("attachments", &self.attachments)
             .finish()
     }
@@ -107,8 +105,7 @@ impl Account {
             scanned_ranges: Vec::new(),
             addresses: Vec::new(),
             relevant_transactions: HashMap::new(),
-            sapling_sent_outputs: Vec::new(),
-            orchard_sent_outputs: Vec::new(),
+            sent_outputs: HashMap::new(),
             attachments: Attachments::new(),
         }
     }
@@ -174,22 +171,20 @@ impl Account {
         self.relevant_transactions.insert(txid, outputs);
     }
 
-    pub fn sapling_sent_outputs(&self) -> &[SaplingSentOutput] {
-        &self.sapling_sent_outputs
+    pub fn sent_outputs(&self) -> &HashMap<TxId, Vec<SentOutput>> {
+        &self.sent_outputs
     }
 
-    pub fn add_sapling_sent_output(&mut self, mut output: SaplingSentOutput) {
-        output.set_index(self.sapling_sent_outputs.len());
-        self.sapling_sent_outputs.push(output);
+    pub fn add_sent_output(&mut self, txid: TxId, mut output: SentOutput) {
+        let outputs = self.sent_outputs.entry(txid).or_default();
+        output.set_index(outputs.len());
+        outputs.push(output);
     }
 
-    pub fn orchard_sent_outputs(&self) -> &[OrchardSentOutput] {
-        &self.orchard_sent_outputs
-    }
-
-    pub fn add_orchard_sent_output(&mut self, mut output: OrchardSentOutput) {
-        output.set_index(self.orchard_sent_outputs.len());
-        self.orchard_sent_outputs.push(output);
+    pub fn add_sent_outputs(&mut self, txid: TxId, outputs: Vec<SentOutput>) {
+        for output in outputs {
+            self.add_sent_output(txid, output);
+        }
     }
 }
 
@@ -223,8 +218,15 @@ impl From<Account> for Envelope {
             e = e.add_assertion("relevant_transaction", tx_envelope);
         }
 
-        e = value.sapling_sent_outputs.iter().fold(e, |e, output| e.add_assertion("sapling_sent_output", output.clone()));
-        e = value.orchard_sent_outputs.iter().fold(e, |e, output| e.add_assertion("orchard_sent_output", output.clone()));
+        // Serialize sent_outputs as a list of (txid, outputs) pairs
+        for (txid, outputs) in &value.sent_outputs {
+            let tx_envelope = Envelope::new(*txid)
+                .add_type("SentTransaction");
+            let tx_envelope = outputs.iter().fold(tx_envelope, |e, output| {
+                e.add_assertion("sent_output", output.clone())
+            });
+            e = e.add_assertion("sent_transaction", tx_envelope);
+        }
 
         value.attachments.add_to_envelope(e)
     }
@@ -260,10 +262,16 @@ impl TryFrom<Envelope> for Account {
             relevant_transactions.insert(txid, outputs);
         }
 
-        let sapling_sent_outputs = envelope_indexed_objects_for_predicate(&envelope, "sapling_sent_output")
-            .map_err(|e| bc_envelope::Error::General(format!("sapling_sent_outputs: {}", e)))?;
-        let orchard_sent_outputs = envelope_indexed_objects_for_predicate(&envelope, "orchard_sent_output")
-            .map_err(|e| bc_envelope::Error::General(format!("orchard_sent_outputs: {}", e)))?;
+        // Deserialize sent_outputs
+        let mut sent_outputs = HashMap::new();
+        for tx_env in envelope.objects_for_predicate("sent_transaction") {
+            tx_env.check_type("SentTransaction")?;
+            let txid: TxId = tx_env.extract_subject()?;
+            let mut outputs: Vec<SentOutput> = tx_env
+                .try_objects_for_predicate("sent_output")?;
+            outputs.sort_by_key(|o| o.index());
+            sent_outputs.insert(txid, outputs);
+        }
 
         let attachments = Attachments::try_from_envelope(&envelope)
             .map_err(|e| bc_envelope::Error::General(format!("attachments: {}", e)))?;
@@ -278,8 +286,7 @@ impl TryFrom<Envelope> for Account {
             scanned_ranges,
             addresses,
             relevant_transactions,
-            sapling_sent_outputs,
-            orchard_sent_outputs,
+            sent_outputs,
             attachments,
         })
     }
@@ -293,7 +300,7 @@ mod tests {
 
     use crate::{
         test_envelope_roundtrip, AccountViewingKey, BlockHash, BlockHeight,
-        KeySource, ReceivedOutput, ScanRange, TxId,
+        KeySource, ReceivedOutput, ScanRange, SentOutput, TxId,
     };
 
     use super::Account;
@@ -310,9 +317,25 @@ mod tests {
                 let txid = TxId::random();
                 let num_outputs = rng.random_range(1..4usize);
                 let outputs: Vec<ReceivedOutput> = (0..num_outputs)
-                    .map(|i| ReceivedOutput::new(i as u32, crate::ReceivedOutputPool::Transparent))
+                    .map(|i| ReceivedOutput::new(i as u32, crate::ReceivedOutputPool::Transparent, crate::Amount::random()))
                     .collect();
                 relevant_transactions.insert(txid, outputs);
+            }
+
+            let num_sent_txs = rng.random_range(0..3usize);
+            let mut sent_outputs = HashMap::new();
+            for _ in 0..num_sent_txs {
+                let txid = TxId::random();
+                let num_outputs = rng.random_range(1..3usize);
+                let outputs: Vec<SentOutput> = (0..num_outputs)
+                    .enumerate()
+                    .map(|(i, _)| {
+                        let mut o = SentOutput::random();
+                        o.set_index(i);
+                        o
+                    })
+                    .collect();
+                sent_outputs.insert(txid, outputs);
             }
 
             let num_ranges = rng.random_range(0..3usize);
@@ -331,8 +354,7 @@ mod tests {
                 scanned_ranges,
                 addresses: Vec::random().set_indexes(),
                 relevant_transactions,
-                sapling_sent_outputs: Vec::random().set_indexes(),
-                orchard_sent_outputs: Vec::random().set_indexes(),
+                sent_outputs,
                 attachments: Attachments::random(),
             }
         }
