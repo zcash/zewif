@@ -1,5 +1,4 @@
 use super::Data;
-use bc_envelope::prelude::*;
 use std::ops::{
     Index, IndexMut, Range, RangeFrom, RangeFull, RangeInclusive, RangeTo, RangeToInclusive,
 };
@@ -146,47 +145,35 @@ impl IndexMut<RangeToInclusive<usize>> for Script {
     }
 }
 
-impl From<Script> for CBOR {
-    fn from(value: Script) -> Self {
-        CBOR::to_byte_string(value.0)
+impl<C> minicbor::Encode<C> for Script {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        e.bytes(self.as_ref())?;
+        Ok(())
     }
 }
 
-impl From<&Script> for CBOR {
-    fn from(value: &Script) -> Self {
-        CBOR::to_byte_string(value.0.clone())
-    }
-}
-
-impl TryFrom<CBOR> for Script {
-    type Error = dcbor::Error;
-
-    fn try_from(cbor: CBOR) -> dcbor::Result<Self> {
-        let bytes = cbor.try_into_byte_string()?;
+impl<'b, C> minicbor::Decode<'b, C> for Script {
+    fn decode(
+        d: &mut minicbor::Decoder<'b>,
+        _ctx: &mut C,
+    ) -> Result<Self, minicbor::decode::Error> {
+        let bytes = d.bytes()?;
         if bytes.len() > 0xffff {
-            return Err("Script length exceeds maximum size of 65535 bytes".into());
+            return Err(minicbor::decode::Error::message(
+                "script length exceeds maximum size of 65535 bytes",
+            ));
         }
-        Ok(Script(Data::from_vec(bytes)))
-    }
-}
-
-impl From<Script> for Envelope {
-    fn from(value: Script) -> Self {
-        Envelope::new(CBOR::from(value))
-    }
-}
-
-impl TryFrom<Envelope> for Script {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.extract_subject()
+        Ok(Script(Data::from_slice(bytes)))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{Data, test_cbor_roundtrip, test_envelope_roundtrip};
+    use crate::{Data, test_cbor_roundtrip};
 
     use super::Script;
 
@@ -201,5 +188,4 @@ mod tests {
     }
 
     test_cbor_roundtrip!(Script);
-    test_envelope_roundtrip!(Script);
 }

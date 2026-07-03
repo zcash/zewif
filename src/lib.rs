@@ -5,16 +5,24 @@
 //!
 //! ## Type Hierarchy
 //!
-//! - [`Zewif`]: Root container (wallets + global transaction history)
-//!   - [`ZewifWallet`]: Wallet (network, seed material, accounts)
+//! - [`Zewif`]: Root container (wallets + global transaction history + secrets)
+//!   - [`ZewifWallet`]: Wallet (network, accounts, address book)
 //!     - [`Account`]: Viewing key, addresses, transaction references
 //!       - [`Address`]: Protocol-specific address ([`ProtocolAddress`])
 //!   - [`Transaction`]: Transaction metadata and optional raw/compact data
+//!   - [`Secrets`]: Spending key material, storable as opaque ciphertext
+//!
+//! ## Serialization
+//!
+//! Types serialize to deterministic CBOR via [`minicbor`] (`minicbor::to_vec`
+//! / `minicbor::decode`), conforming to the CDDL schema in
+//! `docs/draft-nuttycom-zewif.md`. The ZeWIF container framing (magic bytes
+//! and format version) around the CBOR payload is not yet provided by this
+//! crate.
 
 // Macros
 mod blob_macro;
 mod data_macro;
-mod envelope_macros;
 mod mod_use_macro;
 mod string_macro;
 mod test_roundtrip_macros;
@@ -44,8 +52,8 @@ mod_use!(chain_state);
 mod_use!(data);
 mod_use!(error);
 mod_use!(derivation_info);
+mod_use!(extensions);
 mod_use!(incremental_witness);
-mod_use!(indexed);
 mod_use!(key_scope);
 mod_use!(key_source);
 mod_use!(memo);
@@ -55,6 +63,7 @@ mod_use!(non_hardened_child_index);
 mod_use!(protocol_address);
 mod_use!(received_output);
 mod_use!(scan_range);
+mod_use!(secret_store);
 mod_use!(sent_output);
 mod_use!(script);
 mod_use!(legacy_seed);
@@ -67,7 +76,6 @@ mod_use!(tx_block_position);
 mod_use!(txid);
 mod_use!(unified_address);
 mod_use!(unified_full_viewing_key);
-mod_use!(zewif_envelope);
 mod_use!(zewif_impl);
 mod_use!(zewif_wallet);
 

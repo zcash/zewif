@@ -4,7 +4,6 @@ use std::{
 };
 
 use crate::error::{Error, Result};
-use bc_envelope::prelude::*;
 
 use crate::format_zats_as_zec;
 
@@ -236,57 +235,44 @@ impl Mul<usize> for Amount {
     }
 }
 
-impl From<Amount> for CBOR {
-    fn from(value: Amount) -> Self {
-        CBOR::from(value.0)
+impl<C> minicbor::Encode<C> for Amount {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> std::result::Result<(), minicbor::encode::Error<W::Error>> {
+        // Amounts are guaranteed non-negative, and the schema requires an
+        // unsigned integer in zatoshis.
+        e.u64(self.0 as u64)?;
+        Ok(())
     }
 }
 
-impl From<&Amount> for CBOR {
-    fn from(value: &Amount) -> Self {
-        CBOR::from(value.0)
-    }
-}
-
-impl TryFrom<CBOR> for Amount {
-    type Error = dcbor::Error;
-
-    fn try_from(cbor: CBOR) -> dcbor::Result<Self> {
-        let value = i64::try_from(cbor)?;
-        Ok(Amount::try_from(value)?)
-    }
-}
-
-impl From<Amount> for Envelope {
-    fn from(value: Amount) -> Self {
-        Envelope::new(CBOR::from(value))
-    }
-}
-
-impl TryFrom<Envelope> for Amount {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.extract_subject()
+impl<'b, C> minicbor::Decode<'b, C> for Amount {
+    fn decode(
+        d: &mut minicbor::Decoder<'b>,
+        _ctx: &mut C,
+    ) -> std::result::Result<Self, minicbor::decode::Error> {
+        Amount::from_u64(d.u64()?)
+            .map_err(|_| minicbor::decode::Error::message("amount exceeds MAX_MONEY"))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{test_cbor_roundtrip, test_envelope_roundtrip};
+    use crate::test_cbor_roundtrip;
 
     use super::{Amount, MAX_BALANCE};
 
     impl crate::RandomInstance for Amount {
         fn random() -> Self {
-            let mut rng = bc_rand::thread_rng();
+            let mut rng = rand::rng();
             let value = rand::Rng::random_range(&mut rng, 0..=MAX_BALANCE);
             Self(value)
         }
     }
 
     test_cbor_roundtrip!(Amount);
-    test_envelope_roundtrip!(Amount);
 
     #[test]
     fn from_i64_rejects_negative() {

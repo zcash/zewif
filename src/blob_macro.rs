@@ -173,28 +173,29 @@ macro_rules! blob {
             }
         }
 
-        impl From<$name> for bc_envelope::prelude::CBOR {
-            fn from(data: $name) -> Self {
-                bc_envelope::prelude::CBOR::to_byte_string(data.0)
+        impl<C> minicbor::Encode<C> for $name {
+            fn encode<W: minicbor::encode::Write>(
+                &self,
+                e: &mut minicbor::Encoder<W>,
+                _ctx: &mut C,
+            ) -> Result<(), minicbor::encode::Error<W::Error>> {
+                e.bytes(self.as_ref())?;
+                Ok(())
             }
         }
 
-        impl From<&$name> for bc_envelope::prelude::CBOR {
-            fn from(data: &$name) -> Self {
-                bc_envelope::prelude::CBOR::to_byte_string(data.0)
-            }
-        }
-
-        impl TryFrom<bc_envelope::prelude::CBOR> for $name {
-            type Error = dcbor::Error;
-
-            fn try_from(cbor: bc_envelope::prelude::CBOR) -> Result<Self, Self::Error> {
-                let bytes = cbor.try_into_byte_string()?;
-                Self::from_slice(&bytes).map_err(|_| {
-                    dcbor::Error::msg(format!(
-                        "slice length invalid; expected {} bytes, got {}",
-                        $size,
-                        bytes.len()
+        impl<'b, C> minicbor::Decode<'b, C> for $name {
+            fn decode(
+                d: &mut minicbor::Decoder<'b>,
+                _ctx: &mut C,
+            ) -> Result<Self, minicbor::decode::Error> {
+                let bytes = d.bytes()?;
+                Self::from_slice(bytes).map_err(|_| {
+                    minicbor::decode::Error::message(concat!(
+                        "expected a byte string of length ",
+                        stringify!($size),
+                        " for ",
+                        stringify!($name)
                     ))
                 })
             }
@@ -203,8 +204,7 @@ macro_rules! blob {
         #[cfg(test)]
         impl $crate::RandomInstance for $name {
             fn random() -> Self {
-                let mut rng = bc_rand::thread_rng();
-                Self(bc_rand::rng_random_array(&mut rng))
+                Self(rand::random())
             }
         }
     };

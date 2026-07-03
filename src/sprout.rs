@@ -4,7 +4,7 @@
 //! These types store Sprout key data as opaque bytes, sufficient for
 //! preserving Sprout wallet data during migration from zcashd.
 
-use bc_envelope::prelude::*;
+use minicbor::{Decode, Encode};
 
 use crate::Data;
 
@@ -12,8 +12,10 @@ use crate::Data;
 ///
 /// In zcashd this is `(a_pk, sk_enc)` — the paying key and the
 /// receiving key. It is sufficient to detect incoming Sprout notes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cbor(map)]
 pub struct SproutViewingKey {
+    #[n(0)]
     data: Data,
 }
 
@@ -24,22 +26,6 @@ impl SproutViewingKey {
 
     pub fn data(&self) -> &Data {
         &self.data
-    }
-}
-
-impl From<SproutViewingKey> for Envelope {
-    fn from(value: SproutViewingKey) -> Self {
-        Envelope::new(value.data).add_type("SproutViewingKey")
-    }
-}
-
-impl TryFrom<Envelope> for SproutViewingKey {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.check_type("SproutViewingKey")?;
-        let data: Data = envelope.extract_subject()?;
-        Ok(Self { data })
     }
 }
 
@@ -63,19 +49,23 @@ impl SproutSpendingKey {
     }
 }
 
-impl From<SproutSpendingKey> for Envelope {
-    fn from(value: SproutSpendingKey) -> Self {
-        Envelope::new(value.data).add_type("SproutSpendingKey")
+impl<C> minicbor::Encode<C> for SproutSpendingKey {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        e.bytes(self.data.as_ref())?;
+        Ok(())
     }
 }
 
-impl TryFrom<Envelope> for SproutSpendingKey {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.check_type("SproutSpendingKey")?;
-        let data: Data = envelope.extract_subject()?;
-        Ok(Self { data })
+impl<'b, C> minicbor::Decode<'b, C> for SproutSpendingKey {
+    fn decode(
+        d: &mut minicbor::Decoder<'b>,
+        _ctx: &mut C,
+    ) -> Result<Self, minicbor::decode::Error> {
+        Ok(Self::new(Data::from_slice(d.bytes()?)))
     }
 }
 
@@ -83,8 +73,10 @@ impl TryFrom<Envelope> for SproutSpendingKey {
 ///
 /// Stored as the address string. No internal structure is parsed;
 /// the importing wallet either understands Sprout or it doesn't.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cbor(map)]
 pub struct SproutAddress {
+    #[n(0)]
     address: String,
 }
 
@@ -97,22 +89,6 @@ impl SproutAddress {
 
     pub fn address(&self) -> &str {
         &self.address
-    }
-}
-
-impl From<SproutAddress> for Envelope {
-    fn from(value: SproutAddress) -> Self {
-        Envelope::new(value.address).add_type("SproutAddress")
-    }
-}
-
-impl TryFrom<Envelope> for SproutAddress {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.check_type("SproutAddress")?;
-        let address: String = envelope.extract_subject()?;
-        Ok(Self { address })
     }
 }
 
@@ -140,20 +116,20 @@ impl crate::RandomInstance for SproutAddress {
 #[cfg(test)]
 mod viewing_key_tests {
     use super::SproutViewingKey;
-    use crate::test_envelope_roundtrip;
-    test_envelope_roundtrip!(SproutViewingKey);
+    use crate::test_cbor_roundtrip;
+    test_cbor_roundtrip!(SproutViewingKey);
 }
 
 #[cfg(test)]
 mod spending_key_tests {
     use super::SproutSpendingKey;
-    use crate::test_envelope_roundtrip;
-    test_envelope_roundtrip!(SproutSpendingKey);
+    use crate::test_cbor_roundtrip;
+    test_cbor_roundtrip!(SproutSpendingKey);
 }
 
 #[cfg(test)]
 mod address_tests {
     use super::SproutAddress;
-    use crate::test_envelope_roundtrip;
-    test_envelope_roundtrip!(SproutAddress);
+    use crate::test_cbor_roundtrip;
+    test_cbor_roundtrip!(SproutAddress);
 }

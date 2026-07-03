@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{blob, blob_envelope};
+use crate::blob;
 
 blob!(
     SaplingIncomingViewingKey,
@@ -16,4 +16,11 @@ impl Display for SaplingIncomingViewingKey {
     }
 }
 
-blob_envelope!(SaplingIncomingViewingKey);
+#[cfg(test)]
+mod tests {
+    use crate::test_cbor_roundtrip;
+
+    use super::SaplingIncomingViewingKey;
+
+    test_cbor_roundtrip!(SaplingIncomingViewingKey);
+}

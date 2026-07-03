@@ -1,16 +1,19 @@
 use crate::Blob;
-use bc_envelope::prelude::*;
+use minicbor::{Decode, Encode};
 
 /// A Zcash Unified Address (u-address) as defined in ZIP-316.
 ///
 /// Bundles receivers for multiple protocols (transparent, Sapling, Orchard)
 /// into a single address string. Derivation path information is stored at
 /// the account level via `KeySource`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[cbor(map)]
 pub struct UnifiedAddress {
+    #[n(0)]
     address: String,
     /// The diversifier index used to derive this address, if known,
     /// stored as 11 bytes in little-endian order.
+    #[n(1)]
     diversifier_index: Option<Blob<11>>,
 }
 
@@ -35,29 +38,9 @@ impl UnifiedAddress {
     }
 }
 
-impl From<UnifiedAddress> for Envelope {
-    fn from(value: UnifiedAddress) -> Self {
-        Envelope::new(value.address)
-            .add_type("UnifiedAddress")
-            .add_optional_assertion("diversifier_index", value.diversifier_index)
-    }
-}
-
-impl TryFrom<Envelope> for UnifiedAddress {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.check_type("UnifiedAddress")?;
-        let address = envelope.extract_subject()?;
-        let diversifier_index =
-            envelope.try_optional_object_for_predicate("diversifier_index")?;
-        Ok(UnifiedAddress { address, diversifier_index })
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::{Blob, test_envelope_roundtrip};
+    use crate::{Blob, test_cbor_roundtrip};
 
     use super::UnifiedAddress;
 
@@ -70,5 +53,5 @@ mod tests {
         }
     }
 
-    test_envelope_roundtrip!(UnifiedAddress);
+    test_cbor_roundtrip!(UnifiedAddress);
 }

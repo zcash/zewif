@@ -138,24 +138,23 @@ macro_rules! data {
             }
         }
 
-        impl From<$name> for bc_envelope::prelude::CBOR {
-            fn from(data: $name) -> Self {
-                bc_envelope::prelude::CBOR::to_byte_string(data.0)
+        impl<C> minicbor::Encode<C> for $name {
+            fn encode<W: minicbor::encode::Write>(
+                &self,
+                e: &mut minicbor::Encoder<W>,
+                _ctx: &mut C,
+            ) -> Result<(), minicbor::encode::Error<W::Error>> {
+                e.bytes(self.as_ref())?;
+                Ok(())
             }
         }
 
-        impl From<&$name> for bc_envelope::prelude::CBOR {
-            fn from(data: &$name) -> Self {
-                bc_envelope::prelude::CBOR::to_byte_string(data.0.clone())
-            }
-        }
-
-        impl TryFrom<bc_envelope::prelude::CBOR> for $name {
-            type Error = dcbor::Error;
-
-            fn try_from(cbor: bc_envelope::prelude::CBOR) -> Result<Self, Self::Error> {
-                let bytes = cbor.try_into_byte_string()?;
-                Ok(Self::from_slice(&bytes))
+        impl<'b, C> minicbor::Decode<'b, C> for $name {
+            fn decode(
+                d: &mut minicbor::Decoder<'b>,
+                _ctx: &mut C,
+            ) -> Result<Self, minicbor::decode::Error> {
+                Ok(Self::from_slice(d.bytes()?))
             }
         }
 

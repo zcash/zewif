@@ -1,4 +1,4 @@
-use crate::{blob, blob_envelope};
+use crate::blob;
 
 // A Zcash transparent spending key with derivation information.
 //
@@ -14,4 +14,11 @@ blob!(
 );
 impl Copy for TransparentSpendingKey {}
 
-blob_envelope!(TransparentSpendingKey);
+#[cfg(test)]
+mod tests {
+    use crate::test_cbor_roundtrip;
+
+    use super::TransparentSpendingKey;
+
+    test_cbor_roundtrip!(TransparentSpendingKey);
+}

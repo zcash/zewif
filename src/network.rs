@@ -1,85 +1,91 @@
-use crate::error::Error;
-use bc_envelope::prelude::*;
+use std::collections::BTreeMap;
+
+use minicbor::{Decode, Encode};
 
 /// The Zcash network a wallet belongs to: mainnet, testnet, or regtest.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Encode, Decode)]
 pub enum Network {
-    Main,
-    Test,
-    Regtest,
+    #[n(0)]
+    Mainnet,
+    #[n(1)]
+    Testnet,
+    #[n(2)]
+    Regtest(#[n(0)] RegtestParams),
 }
 
-impl From<Network> for String {
-    fn from(value: Network) -> String {
-        match value {
-            Network::Main => "main".to_string(),
-            Network::Test => "test".to_string(),
-            Network::Regtest => "regtest".to_string(),
-        }
+/// The network-upgrade activation schedule that defines a regtest network.
+///
+/// Regtest networks vary in their activation schedules, and wallet data
+/// recorded against one schedule is in general incompatible with a chain
+/// using another. Importers should refuse or flag data whose activation
+/// schedule does not match the chain they operate against.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Encode, Decode)]
+#[cbor(map)]
+pub struct RegtestParams {
+    /// Maps each consensus branch ID (as defined by ZIP 200 and successors)
+    /// to the activation height of the corresponding network upgrade.
+    #[n(0)]
+    activations: BTreeMap<u32, u32>,
+}
+
+impl RegtestParams {
+    pub fn new(activations: BTreeMap<u32, u32>) -> Self {
+        Self { activations }
     }
-}
 
-impl TryFrom<String> for Network {
-    type Error = Error;
-
-    fn try_from(value: String) -> crate::error::Result<Self> {
-        if value == "main" {
-            Ok(Network::Main)
-        } else if value == "test" {
-            Ok(Network::Test)
-        } else if value == "regtest" {
-            Ok(Network::Regtest)
-        } else {
-            Err(Error::InvalidNetwork(value))
-        }
-    }
-}
-
-impl From<Network> for CBOR {
-    fn from(value: Network) -> Self {
-        String::from(value).into()
-    }
-}
-
-impl TryFrom<CBOR> for Network {
-    type Error = dcbor::Error;
-
-    fn try_from(cbor: CBOR) -> dcbor::Result<Self> {
-        Ok(cbor.try_into_text()?.try_into()?)
-    }
-}
-
-impl From<Network> for Envelope {
-    fn from(value: Network) -> Self {
-        Envelope::new(String::from(value))
-    }
-}
-
-impl TryFrom<Envelope> for Network {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        let network_str: String = envelope.extract_subject()?;
-        Network::try_from(network_str).map_err(|e| e.into())
+    pub fn activations(&self) -> &BTreeMap<u32, u32> {
+        &self.activations
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{test_cbor_roundtrip, test_envelope_roundtrip};
+    use crate::test_cbor_roundtrip;
 
-    use super::Network;
+    use super::{Network, RegtestParams};
+
+    impl crate::RandomInstance for RegtestParams {
+        fn random() -> Self {
+            use rand::Rng;
+            let mut rng = rand::rng();
+            let activations = (0..rng.random_range(0..4usize))
+                .map(|_| (rng.random::<u32>(), rng.random::<u32>()))
+                .collect();
+            Self { activations }
+        }
+    }
 
     impl crate::RandomInstance for Network {
         fn random() -> Self {
             match rand::random::<u8>() % 3 {
-                0 => Network::Main,
-                1 => Network::Test,
-                _ => Network::Regtest,
+                0 => Network::Mainnet,
+                1 => Network::Testnet,
+                _ => Network::Regtest(RegtestParams::random()),
             }
         }
     }
 
     test_cbor_roundtrip!(Network);
-    test_envelope_roundtrip!(Network);
+
+    /// Tagged unions encode as `[variant-id, [body?]]`: an empty body array
+    /// for payload-free variants, a single record for data-bearing ones.
+    #[test]
+    fn union_wire_shape() {
+        assert_eq!(
+            minicbor::to_vec(Network::Mainnet).unwrap(),
+            [0x82, 0x00, 0x80]
+        );
+        assert_eq!(
+            minicbor::to_vec(Network::Testnet).unwrap(),
+            [0x82, 0x01, 0x80]
+        );
+        let regtest = Network::Regtest(RegtestParams::new([(0xc2d6d0b4, 1)].into()));
+        assert_eq!(
+            minicbor::to_vec(&regtest).unwrap(),
+            // [2, [{0: {0xc2d6d0b4: 1}}]]
+            [
+                0x82, 0x02, 0x81, 0xa1, 0x00, 0xa1, 0x1a, 0xc2, 0xd6, 0xd0, 0xb4, 0x01
+            ]
+        );
+    }
 }

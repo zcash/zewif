@@ -1,62 +1,39 @@
-use bc_envelope::prelude::*;
+use minicbor::{Decode, Encode};
 
-use crate::{Data, NoQuotesDebugOption, SeedFingerprint};
+use crate::Data;
 
-#[derive(Clone, PartialEq)]
+/// A raw pre-mnemonic HD seed.
+///
+/// The seed's ZIP 32 fingerprint is not stored here: the seed entry in the
+/// secret store carries it, and it is derivable from the seed bytes.
+#[derive(Clone, PartialEq, Encode, Decode)]
+#[cbor(map)]
 pub struct LegacySeed {
+    #[n(0)]
     seed_data: Data,
-    fingerprint: Option<SeedFingerprint>,
 }
 
 impl std::fmt::Debug for LegacySeed {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        f.debug_struct("MnemonicSeed")
+        f.debug_struct("LegacySeed")
             .field("seed_data", &"<elided>".to_string())
-            .field(
-                "fingerprint",
-                &NoQuotesDebugOption(&self.fingerprint.map(|f| f.to_hex())),
-            )
             .finish()
     }
 }
 
 impl LegacySeed {
-    pub fn new(seed_data: Data, fingerprint: Option<SeedFingerprint>) -> Self {
-        Self { seed_data, fingerprint }
+    pub fn new(seed_data: Data) -> Self {
+        Self { seed_data }
     }
 
     pub fn seed_data(&self) -> &Data {
         &self.seed_data
     }
-
-    pub fn fingerprint(&self) -> Option<&SeedFingerprint> {
-        self.fingerprint.as_ref()
-    }
-}
-
-impl From<LegacySeed> for Envelope {
-    fn from(value: LegacySeed) -> Self {
-        Envelope::new(value.seed_data)
-            .add_type("LegacySeed")
-            .add_optional_assertion("fingerprint", value.fingerprint)
-    }
-}
-
-impl TryFrom<Envelope> for LegacySeed {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.check_type("LegacySeed")?;
-        let seed_data = envelope.extract_subject()?;
-        let fingerprint =
-            envelope.try_optional_object_for_predicate("fingerprint")?;
-        Ok(Self { seed_data, fingerprint })
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{Data, SeedFingerprint, test_envelope_roundtrip};
+    use crate::{Data, test_cbor_roundtrip};
 
     use super::LegacySeed;
 
@@ -64,10 +41,9 @@ mod tests {
         fn random() -> Self {
             Self {
                 seed_data: Data::random(),
-                fingerprint: SeedFingerprint::opt_random(),
             }
         }
     }
 
-    test_envelope_roundtrip!(LegacySeed);
+    test_cbor_roundtrip!(LegacySeed);
 }

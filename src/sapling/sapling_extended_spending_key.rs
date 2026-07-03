@@ -1,4 +1,4 @@
-use crate::{blob, blob_envelope};
+use crate::blob;
 
 // A hierarchical deterministic (HD) Sapling spending key with derivation information.
 //
@@ -15,4 +15,11 @@ blob!(
     "A Sapling Extended Spending Key, encoded as specified in ZIP 32"
 );
 
-blob_envelope!(SaplingExtendedSpendingKey);
+#[cfg(test)]
+mod tests {
+    use crate::test_cbor_roundtrip;
+
+    use super::SaplingExtendedSpendingKey;
+
+    test_cbor_roundtrip!(SaplingExtendedSpendingKey);
+}

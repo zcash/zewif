@@ -1,5 +1,4 @@
 use crate::error::{Error, Result};
-use bc_envelope::prelude::*;
 use std::{
     fmt,
     ops::{
@@ -308,56 +307,39 @@ impl Copy for Blob32 {}
 /// Type alias for Blob<64>
 pub type Blob64 = Blob<64>;
 
-impl<const N: usize> From<Blob<N>> for CBOR {
-    fn from(data: Blob<N>) -> Self {
-        CBOR::to_byte_string(data)
+impl<const N: usize, C> minicbor::Encode<C> for Blob<N> {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> std::result::Result<(), minicbor::encode::Error<W::Error>> {
+        e.bytes(&self.0)?;
+        Ok(())
     }
 }
 
-impl<const N: usize> From<&Blob<N>> for CBOR {
-    fn from(data: &Blob<N>) -> Self {
-        CBOR::to_byte_string(data)
-    }
-}
-
-impl<const N: usize> TryFrom<CBOR> for Blob<N> {
-    type Error = dcbor::Error;
-
-    fn try_from(cbor: CBOR) -> dcbor::Result<Self> {
-        let bytes = cbor.try_into_byte_string()?;
-        let blob =
-            Blob::from_slice(&bytes).map_err(|e| dcbor::Error::msg(format!("Blob: {e}")))?;
-        Ok(blob)
-    }
-}
-
-impl<const N: usize> From<Blob<N>> for Envelope {
-    fn from(value: Blob<N>) -> Self {
-        Envelope::new(CBOR::from(value))
-    }
-}
-
-impl<const N: usize> TryFrom<Envelope> for Blob<N> {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.extract_subject()
+impl<'b, const N: usize, C> minicbor::Decode<'b, C> for Blob<N> {
+    fn decode(
+        d: &mut minicbor::Decoder<'b>,
+        _ctx: &mut C,
+    ) -> std::result::Result<Self, minicbor::decode::Error> {
+        let bytes = d.bytes()?;
+        Blob::from_slice(bytes)
+            .map_err(|_| minicbor::decode::Error::message("unexpected byte string length for Blob"))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{test_cbor_roundtrip, test_envelope_roundtrip};
+    use crate::test_cbor_roundtrip;
 
     use super::{Blob, Blob32};
 
     impl<const N: usize> crate::RandomInstance for Blob<N> {
         fn random() -> Self {
-            let mut rng = bc_rand::thread_rng();
-            Self(bc_rand::rng_random_array(&mut rng))
+            Self(rand::random())
         }
     }
 
     test_cbor_roundtrip!(Blob32);
-    test_envelope_roundtrip!(Blob32);
 }

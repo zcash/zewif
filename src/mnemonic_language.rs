@@ -1,5 +1,4 @@
 use crate::error::{Error, Result};
-use bc_envelope::prelude::*;
 
 /// The language used for BIP-39/BIP-44 mnemonic seed phrases in a wallet.
 ///
@@ -195,48 +194,38 @@ impl TryFrom<String> for MnemonicLanguage {
     }
 }
 
-impl From<MnemonicLanguage> for CBOR {
-    fn from(value: MnemonicLanguage) -> Self {
-        String::from(value).into()
+impl<C> minicbor::Encode<C> for MnemonicLanguage {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> std::result::Result<(), minicbor::encode::Error<W::Error>> {
+        e.str(&String::from(*self))?;
+        Ok(())
     }
 }
 
-impl TryFrom<CBOR> for MnemonicLanguage {
-    type Error = dcbor::Error;
-
-    fn try_from(cbor: CBOR) -> dcbor::Result<Self> {
-        Ok(cbor.try_into_text()?.try_into()?)
-    }
-}
-
-impl From<MnemonicLanguage> for Envelope {
-    fn from(value: MnemonicLanguage) -> Self {
-        Envelope::new(String::from(value))
-    }
-}
-
-impl TryFrom<Envelope> for MnemonicLanguage {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        let language_str: String = envelope.extract_subject()?;
-        MnemonicLanguage::try_from(language_str).map_err(|e| e.into())
+impl<'b, C> minicbor::Decode<'b, C> for MnemonicLanguage {
+    fn decode(
+        d: &mut minicbor::Decoder<'b>,
+        _ctx: &mut C,
+    ) -> std::result::Result<Self, minicbor::decode::Error> {
+        MnemonicLanguage::try_from(d.str()?.to_string())
+            .map_err(|_| minicbor::decode::Error::message("unknown mnemonic language tag"))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{test_cbor_roundtrip, test_envelope_roundtrip};
+    use crate::test_cbor_roundtrip;
 
     use super::MnemonicLanguage;
 
     impl crate::RandomInstance for MnemonicLanguage {
         fn random() -> Self {
-            MnemonicLanguage::from_u32(rand::random::<u8>() as u32 % 10)
-                .unwrap()
+            MnemonicLanguage::from_u32(rand::random::<u8>() as u32 % 10).unwrap()
         }
     }
 
     test_cbor_roundtrip!(MnemonicLanguage);
-    test_envelope_roundtrip!(MnemonicLanguage);
 }

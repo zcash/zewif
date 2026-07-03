@@ -1,5 +1,4 @@
 use crate::error::{Error, Result};
-use bc_envelope::prelude::*;
 use std::{
     fmt,
     io::{self, Read, Write},
@@ -71,7 +70,10 @@ impl TxId {
         data.reverse();
 
         Ok(Self(<[u8; 32]>::try_from(&data[..]).map_err(|_| {
-            Error::HexLengthMismatch { expected: 32, actual: data.len() }
+            Error::HexLengthMismatch {
+                expected: 32,
+                actual: data.len(),
+            }
         })?))
     }
 
@@ -135,63 +137,41 @@ impl TxId {
     }
 }
 
-impl From<TxId> for CBOR {
-    fn from(value: TxId) -> Self {
-        CBOR::to_byte_string(value.0)
+impl<C> minicbor::Encode<C> for TxId {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> std::result::Result<(), minicbor::encode::Error<W::Error>> {
+        e.bytes(&self.0)?;
+        Ok(())
     }
 }
 
-impl From<&TxId> for CBOR {
-    fn from(value: &TxId) -> Self {
-        CBOR::to_byte_string(value.0)
-    }
-}
-
-impl TryFrom<CBOR> for TxId {
-    type Error = dcbor::Error;
-
-    fn try_from(cbor: CBOR) -> dcbor::Result<Self> {
-        let bytes = cbor.try_into_byte_string()?;
-        if bytes.len() != 32 {
-            return Err(format!(
-                "Invalid TxId length: expected 32 bytes, got {}",
-                bytes.len()
-            )
-            .into());
-        }
-        let mut hash = [0u8; 32];
-        hash.copy_from_slice(&bytes);
+impl<'b, C> minicbor::Decode<'b, C> for TxId {
+    fn decode(
+        d: &mut minicbor::Decoder<'b>,
+        _ctx: &mut C,
+    ) -> std::result::Result<Self, minicbor::decode::Error> {
+        let bytes = d.bytes()?;
+        let hash = <[u8; 32]>::try_from(bytes).map_err(|_| {
+            minicbor::decode::Error::message("expected a byte string of length 32 for TxId")
+        })?;
         Ok(TxId::from_bytes(hash))
-    }
-}
-
-impl From<TxId> for Envelope {
-    fn from(value: TxId) -> Self {
-        Envelope::new(CBOR::from(value))
-    }
-}
-
-impl TryFrom<Envelope> for TxId {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.extract_subject()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{test_cbor_roundtrip, test_envelope_roundtrip};
+    use crate::test_cbor_roundtrip;
 
     use super::TxId;
 
     impl crate::RandomInstance for TxId {
         fn random() -> Self {
-            let mut rng = bc_rand::thread_rng();
-            Self(bc_rand::rng_random_array(&mut rng))
+            Self(rand::random())
         }
     }
 
     test_cbor_roundtrip!(TxId);
-    test_envelope_roundtrip!(TxId);
 }

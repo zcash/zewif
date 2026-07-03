@@ -1,4 +1,4 @@
-use crate::{blob, blob_envelope};
+use crate::blob;
 
 blob!(
     SeedFingerprint,
@@ -7,5 +7,11 @@ blob!(
 );
 impl Copy for SeedFingerprint {}
 
-blob_envelope!(SeedFingerprint);
+#[cfg(test)]
+mod tests {
+    use crate::test_cbor_roundtrip;
 
+    use super::SeedFingerprint;
+
+    test_cbor_roundtrip!(SeedFingerprint);
+}

@@ -1,41 +1,35 @@
-use bc_envelope::prelude::*;
+use minicbor::{Decode, Encode};
 
-use crate::{MnemonicLanguage, NoQuotesDebugOption, SeedFingerprint};
+use crate::{MnemonicLanguage, NoQuotesDebugOption};
 
-#[derive(Clone, PartialEq)]
+/// A BIP-39 mnemonic phrase and, optionally, the language of its wordlist.
+///
+/// The seed's ZIP 32 fingerprint is not stored here: the seed entry in the
+/// secret store carries it, and it is derivable from the mnemonic.
+#[derive(Clone, PartialEq, Encode, Decode)]
+#[cbor(map)]
 pub struct Bip39Mnemonic {
+    #[n(0)]
     mnemonic: String,
+    #[n(1)]
     language: Option<MnemonicLanguage>,
-    fingerprint: Option<SeedFingerprint>,
 }
 
 impl std::fmt::Debug for Bip39Mnemonic {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        f.debug_struct("MnemonicSeed")
+        f.debug_struct("Bip39Mnemonic")
             .field("language", &NoQuotesDebugOption(&self.language))
             .field("mnemonic", &"<elided>".to_string())
-            .field(
-                "fingerprint",
-                &NoQuotesDebugOption(&self.fingerprint.map(|f| f.to_hex())),
-            )
             .finish()
     }
 }
 
 impl Bip39Mnemonic {
-    pub fn new(
-        mnemonic: impl AsRef<str>,
-        language: Option<MnemonicLanguage>,
-    ) -> Self {
+    pub fn new(mnemonic: impl AsRef<str>, language: Option<MnemonicLanguage>) -> Self {
         Self {
             mnemonic: mnemonic.as_ref().to_string(),
             language,
-            fingerprint: None,
         }
-    }
-
-    pub fn set_fingerprint(&mut self, fingerprint: SeedFingerprint) {
-        self.fingerprint = Some(fingerprint);
     }
 
     pub fn mnemonic(&self) -> &String {
@@ -50,41 +44,14 @@ impl Bip39Mnemonic {
         self.language.as_ref()
     }
 
-    pub fn fingerprint(&self) -> Option<&SeedFingerprint> {
-        self.fingerprint.as_ref()
-    }
-
     pub fn set_language(&mut self, language: MnemonicLanguage) {
         self.language = Some(language);
     }
 }
 
-impl From<Bip39Mnemonic> for Envelope {
-    fn from(value: Bip39Mnemonic) -> Self {
-        Envelope::new(value.mnemonic)
-            .add_type("Bip39Mnemonic")
-            .add_optional_assertion("language", value.language)
-            .add_optional_assertion("fingerprint", value.fingerprint)
-    }
-}
-
-impl TryFrom<Envelope> for Bip39Mnemonic {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.check_type("Bip39Mnemonic")?;
-        let mnemonic = envelope.extract_subject()?;
-        let language =
-            envelope.try_optional_object_for_predicate("language")?;
-        let fingerprint =
-            envelope.try_optional_object_for_predicate("fingerprint")?;
-        Ok(Self { mnemonic, language, fingerprint })
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::{MnemonicLanguage, SeedFingerprint, test_envelope_roundtrip};
+    use crate::{MnemonicLanguage, test_cbor_roundtrip};
 
     use super::Bip39Mnemonic;
 
@@ -93,10 +60,9 @@ mod tests {
             Self {
                 mnemonic: String::random(),
                 language: MnemonicLanguage::opt_random(),
-                fingerprint: SeedFingerprint::opt_random(),
             }
         }
     }
 
-    test_envelope_roundtrip!(Bip39Mnemonic);
+    test_cbor_roundtrip!(Bip39Mnemonic);
 }

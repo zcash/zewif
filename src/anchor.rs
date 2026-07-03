@@ -1,4 +1,4 @@
-use crate::{blob, blob_envelope};
+use crate::blob;
 
 blob!(
     Anchor,
@@ -34,4 +34,11 @@ let anchor = Anchor::new([0u8; 32]);
 );
 impl Copy for Anchor {}
 
-blob_envelope!(Anchor);
+#[cfg(test)]
+mod tests {
+    use crate::test_cbor_roundtrip;
+
+    use super::Anchor;
+
+    test_cbor_roundtrip!(Anchor);
+}

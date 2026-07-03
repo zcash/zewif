@@ -1,104 +1,77 @@
-use bc_envelope::prelude::*;
+use minicbor::{Decode, Encode};
 
 use crate::{
-    sapling::SaplingExtendedFullViewingKey,
-    sprout::SproutViewingKey,
-    UnifiedFullViewingKey,
+    UnifiedFullViewingKey, sapling::SaplingExtendedFullViewingKey, sprout::SproutViewingKey,
 };
 
 /// The viewing capability associated with an account.
 ///
 /// This determines what the account can observe on-chain. Each variant
 /// corresponds to a different era or style of Zcash key management.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum AccountViewingKey {
     /// A Unified Full Viewing Key (canonical ZIP-316 encoding), which may
     /// contain Orchard, Sapling, and/or transparent components.
-    Ufvk(UnifiedFullViewingKey),
+    #[n(0)]
+    Ufvk(#[n(0)] UnifiedFullViewingKey),
     /// A standalone Sapling extended full viewing key (canonical encoding).
-    SaplingExtFvk(SaplingExtendedFullViewingKey),
+    #[n(1)]
+    SaplingExtFvk(#[n(0)] SaplingExtFvk),
     /// A Sprout viewing key (64 bytes: `a_pk` + `sk_enc`). Sufficient to
     /// detect incoming Sprout notes.
-    SproutViewingKey(SproutViewingKey),
+    #[n(2)]
+    SproutViewingKey(#[n(0)] SproutViewingKey),
     /// A set of transparent addresses with no unified key structure
     /// (legacy zcashd random-key wallet).
+    #[n(3)]
     TransparentAddressSet,
 }
 
-impl From<AccountViewingKey> for Envelope {
-    fn from(value: AccountViewingKey) -> Self {
-        let (variant, e) = match value {
-            AccountViewingKey::Ufvk(ufvk) => {
-                ("ufvk", Envelope::new(ufvk.encoding()))
-            }
-            AccountViewingKey::SaplingExtFvk(fvk) => {
-                ("sapling_ext_fvk", Envelope::new(fvk))
-            }
-            AccountViewingKey::SproutViewingKey(key) => {
-                ("sprout_viewing_key", Envelope::new(key.data().clone()))
-            }
-            AccountViewingKey::TransparentAddressSet => {
-                ("transparent_address_set", Envelope::new("transparent_address_set"))
-            }
-        };
-        e.add_type("AccountViewingKey")
-            .add_assertion("variant", variant)
+/// A standalone Sapling extended full viewing key in its canonical ZIP 32
+/// encoding.
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cbor(map)]
+pub struct SaplingExtFvk {
+    #[n(0)]
+    fvk: SaplingExtendedFullViewingKey,
+}
+
+impl SaplingExtFvk {
+    pub fn new(fvk: SaplingExtendedFullViewingKey) -> Self {
+        Self { fvk }
+    }
+
+    pub fn fvk(&self) -> &SaplingExtendedFullViewingKey {
+        &self.fvk
     }
 }
 
-impl TryFrom<Envelope> for AccountViewingKey {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.check_type("AccountViewingKey")?;
-        let variant: String = envelope.extract_object_for_predicate("variant")?;
-        match variant.as_str() {
-            "ufvk" => {
-                let encoding: String = envelope.extract_subject()?;
-                Ok(AccountViewingKey::Ufvk(UnifiedFullViewingKey::new(encoding)))
-            }
-            "sapling_ext_fvk" => {
-                let fvk: SaplingExtendedFullViewingKey = envelope.extract_subject()?;
-                Ok(AccountViewingKey::SaplingExtFvk(fvk))
-            }
-            "sprout_viewing_key" => {
-                let data: crate::Data = envelope.extract_subject()?;
-                Ok(AccountViewingKey::SproutViewingKey(SproutViewingKey::new(data)))
-            }
-            "transparent_address_set" => {
-                Ok(AccountViewingKey::TransparentAddressSet)
-            }
-            other => Err(bc_envelope::Error::General(
-                format!("unknown AccountViewingKey variant: {}", other),
-            )),
-        }
+impl From<SaplingExtendedFullViewingKey> for SaplingExtFvk {
+    fn from(fvk: SaplingExtendedFullViewingKey) -> Self {
+        Self::new(fvk)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{test_envelope_roundtrip, RandomInstance};
+    use crate::{RandomInstance, test_cbor_roundtrip};
 
-    use super::AccountViewingKey;
+    use super::{AccountViewingKey, SaplingExtFvk};
 
     impl RandomInstance for AccountViewingKey {
         fn random() -> Self {
             use rand::Rng;
             let mut rng = rand::rng();
             match rng.random_range(0..4u32) {
-                0 => AccountViewingKey::Ufvk(
-                    crate::UnifiedFullViewingKey::random(),
-                ),
-                1 => AccountViewingKey::SaplingExtFvk(
+                0 => AccountViewingKey::Ufvk(crate::UnifiedFullViewingKey::random()),
+                1 => AccountViewingKey::SaplingExtFvk(SaplingExtFvk::new(
                     crate::sapling::SaplingExtendedFullViewingKey::random(),
-                ),
-                2 => AccountViewingKey::SproutViewingKey(
-                    crate::sprout::SproutViewingKey::random(),
-                ),
+                )),
+                2 => AccountViewingKey::SproutViewingKey(crate::sprout::SproutViewingKey::random()),
                 _ => AccountViewingKey::TransparentAddressSet,
             }
         }
     }
 
-    test_envelope_roundtrip!(AccountViewingKey);
+    test_cbor_roundtrip!(AccountViewingKey);
 }
