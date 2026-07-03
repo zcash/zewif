@@ -87,8 +87,11 @@ A ZeWIF document is the concatenation of:
 
 Readers MUST reject a document whose magic does not match, and MUST NOT
 attempt to interpret the payload of a document whose version they do not
-implement. Version 1 payloads are not compressed; compression, if ever
-introduced, will be signalled by a new container version.
+implement. The container version selects the schema revision and every
+parsing rule applicable to the payload; implementations supporting multiple
+versions MUST dispatch on it rather than attempting to unify parsers.
+Version 1 payloads are not compressed; compression, if ever introduced, will
+be signalled by a new container version.
 
 ## CBOR profile
 
@@ -97,7 +100,12 @@ introduced, will be signalled by a new container version.
   bytewise lexicographic order of their encodings. Readers SHOULD accept any
   well-formed CBOR that satisfies the schema.
 - Optional record fields are expressed by *omitting* the map entry. Writers
-  MUST NOT encode an absent optional field as CBOR `null`.
+  MUST NOT encode an absent optional field as CBOR `null`; readers SHOULD
+  treat a `null` value in an optional field position as if the entry were
+  absent. (The reader tolerance is a defense in depth: encoder libraries
+  have been observed to disagree on the encoding of absent optional values,
+  and a document produced by a nonconformant writer should degrade to a
+  readable document rather than an unreadable one.)
 - Readers MUST ignore map keys not defined in the schema version they
   implement. This is the format's forward-compatibility mechanism.
 - A field index (map key), once assigned a meaning in a published revision of
@@ -575,6 +583,14 @@ specification. Implementation notes, non-normative:
 - Conformance is tested by randomized round-trip tests plus byte-exact
   re-encoding checks; test vectors are generated from this specification
   independently of the codec implementation.
+- The normativity of this schema, rather than of any codec library, is
+  enforced mechanically: golden byte-exact fixture documents are committed
+  to the repository and asserted in continuous integration, so a behavioral
+  change in the codec dependency fails the build rather than shipping
+  spec-divergent bytes; emitted documents are additionally validated against
+  the CDDL with an independent tool. Codec dependency upgrades are treated
+  as format-affecting changes, permitted only when the golden vectors
+  continue to pass.
 
 # References
 
