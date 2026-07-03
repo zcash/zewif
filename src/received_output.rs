@@ -1,10 +1,6 @@
 use bc_envelope::prelude::*;
 
-use crate::{
-    orchard::OrchardWitness,
-    sapling::SaplingWitness,
-    Amount, Blob, Memo, TxId,
-};
+use crate::{Amount, Blob, Memo, TxId, orchard::OrchardWitness, sapling::SaplingWitness};
 
 /// A received output within a transaction that belongs to an account.
 ///
@@ -27,17 +23,71 @@ pub struct ReceivedOutput {
     spent_by: Option<TxId>,
 }
 
+/// Locates a note commitment within its pool's note commitment tree, either
+/// as a bare position or via a full incremental witness (which carries the
+/// position along with an inclusion proof).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CommitmentTreeData<W> {
+    /// The 0-based leaf position of the note commitment in the tree.
+    Position(u64),
+    /// A full incremental witness; the position is recoverable from it.
+    Witness(W),
+}
+
+impl<W> From<CommitmentTreeData<W>> for Envelope
+where
+    W: Into<Envelope>,
+{
+    fn from(value: CommitmentTreeData<W>) -> Self {
+        match value {
+            CommitmentTreeData::Position(position) => Envelope::new(position)
+                .add_type("CommitmentTreeData")
+                .add_assertion("variant", "position"),
+            CommitmentTreeData::Witness(w) => {
+                let witness: Envelope = w.into();
+                Envelope::new("witness")
+                    .add_type("CommitmentTreeData")
+                    .add_assertion("witness", witness)
+            }
+        }
+    }
+}
+
+impl<W> TryFrom<Envelope> for CommitmentTreeData<W>
+where
+    W: TryFrom<Envelope, Error = bc_envelope::Error>,
+{
+    type Error = bc_envelope::Error;
+
+    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
+        envelope.check_type("CommitmentTreeData")?;
+        match envelope.try_optional_object_for_predicate::<W>("witness")? {
+            Some(w) => Ok(CommitmentTreeData::Witness(w)),
+            None => {
+                let variant: String = envelope.extract_object_for_predicate("variant")?;
+                match variant.as_str() {
+                    "position" => Ok(CommitmentTreeData::Position(envelope.extract_subject()?)),
+                    other => Err(bc_envelope::Error::General(format!(
+                        "unknown CommitmentTreeData variant: {}",
+                        other
+                    ))),
+                }
+            }
+        }
+    }
+}
+
 /// Identifies which pool a received output belongs to and carries
 /// pool-specific metadata.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReceivedOutputPool {
     Transparent,
     Sapling {
-        witness: Option<SaplingWitness>,
+        tree_data: Option<CommitmentTreeData<SaplingWitness>>,
         nullifier: Option<Blob<32>>,
     },
     Orchard {
-        witness: Option<OrchardWitness>,
+        tree_data: Option<CommitmentTreeData<OrchardWitness>>,
         nullifier: Option<Blob<32>>,
     },
 }
@@ -60,6 +110,26 @@ impl ReceivedOutput {
 
     pub fn pool(&self) -> &ReceivedOutputPool {
         &self.pool
+    }
+
+    /// The position of the output's note commitment in its pool's note
+    /// commitment tree, if known. Returns `None` for non-shielded pools.
+    pub fn commitment_tree_position(&self) -> Option<u64> {
+        match &self.pool {
+            ReceivedOutputPool::Sapling { tree_data, .. } => {
+                tree_data.as_ref().map(|td| match td {
+                    CommitmentTreeData::Position(p) => *p,
+                    CommitmentTreeData::Witness(w) => w.note_position() as u64,
+                })
+            }
+            ReceivedOutputPool::Orchard { tree_data, .. } => {
+                tree_data.as_ref().map(|td| match td {
+                    CommitmentTreeData::Position(p) => *p,
+                    CommitmentTreeData::Witness(w) => w.note_position() as u64,
+                })
+            }
+            _ => None,
+        }
     }
 
     pub fn value(&self) -> Amount {
@@ -97,13 +167,14 @@ impl From<ReceivedOutput> for Envelope {
             .add_type("ReceivedOutput")
             .add_assertion("value", value.value);
         let e = match value.pool {
-            ReceivedOutputPool::Transparent => {
-                e.add_assertion("pool", "transparent")
-            }
-            ReceivedOutputPool::Sapling { witness, nullifier } => {
+            ReceivedOutputPool::Transparent => e.add_assertion("pool", "transparent"),
+            ReceivedOutputPool::Sapling {
+                tree_data,
+                nullifier,
+            } => {
                 let e = e.add_assertion("pool", "sapling");
-                let e = match witness {
-                    Some(w) => e.add_assertion("witness", w),
+                let e = match tree_data {
+                    Some(td) => e.add_assertion("tree_data", td),
                     None => e,
                 };
                 match nullifier {
@@ -111,10 +182,13 @@ impl From<ReceivedOutput> for Envelope {
                     None => e,
                 }
             }
-            ReceivedOutputPool::Orchard { witness, nullifier } => {
+            ReceivedOutputPool::Orchard {
+                tree_data,
+                nullifier,
+            } => {
                 let e = e.add_assertion("pool", "orchard");
-                let e = match witness {
-                    Some(w) => e.add_assertion("witness", w),
+                let e = match tree_data {
+                    Some(td) => e.add_assertion("tree_data", td),
                     None => e,
                 };
                 match nullifier {
@@ -150,26 +224,41 @@ impl TryFrom<Envelope> for ReceivedOutput {
         let pool = match pool_tag.as_str() {
             "transparent" => ReceivedOutputPool::Transparent,
             "sapling" => {
-                let witness = envelope.try_optional_object_for_predicate("witness")?;
+                let tree_data = envelope.try_optional_object_for_predicate("tree_data")?;
                 let nullifier = envelope.try_optional_object_for_predicate("nullifier")?;
-                ReceivedOutputPool::Sapling { witness, nullifier }
+                ReceivedOutputPool::Sapling {
+                    tree_data,
+                    nullifier,
+                }
             }
             "orchard" => {
-                let witness = envelope.try_optional_object_for_predicate("witness")?;
+                let tree_data = envelope.try_optional_object_for_predicate("tree_data")?;
                 let nullifier = envelope.try_optional_object_for_predicate("nullifier")?;
-                ReceivedOutputPool::Orchard { witness, nullifier }
+                ReceivedOutputPool::Orchard {
+                    tree_data,
+                    nullifier,
+                }
             }
             other => {
-                return Err(bc_envelope::Error::General(
-                    format!("unknown pool type: {}", other),
-                ));
+                return Err(bc_envelope::Error::General(format!(
+                    "unknown pool type: {}",
+                    other
+                )));
             }
         };
         let memo = envelope.extract_optional_object_for_predicate("memo")?;
-        let is_change = envelope.extract_optional_object_for_predicate::<bool>("is_change")?
+        let is_change = envelope
+            .extract_optional_object_for_predicate::<bool>("is_change")?
             .unwrap_or(false);
         let spent_by = envelope.try_optional_object_for_predicate("spent_by")?;
-        Ok(Self { output_index, pool, value, memo, is_change, spent_by })
+        Ok(Self {
+            output_index,
+            pool,
+            value,
+            memo,
+            is_change,
+            spent_by,
+        })
     }
 }
 
@@ -177,8 +266,20 @@ impl TryFrom<Envelope> for ReceivedOutput {
 mod tests {
     use crate::test_envelope_roundtrip;
 
-    use super::{ReceivedOutput, ReceivedOutputPool};
-    use crate::{Amount, Blob, Memo, TxId};
+    use super::{CommitmentTreeData, ReceivedOutput, ReceivedOutputPool};
+    use crate::{Amount, Blob, Memo, TxId, orchard::OrchardWitness, sapling::SaplingWitness};
+
+    impl<W: crate::RandomInstance> crate::RandomInstance for CommitmentTreeData<W> {
+        fn random() -> Self {
+            use rand::Rng;
+            let mut rng = rand::rng();
+            if rng.random_bool(0.5) {
+                CommitmentTreeData::Position(rng.random_range(0..u32::MAX as u64))
+            } else {
+                CommitmentTreeData::Witness(W::random())
+            }
+        }
+    }
 
     impl crate::RandomInstance for ReceivedOutput {
         fn random() -> Self {
@@ -188,11 +289,11 @@ mod tests {
             let pool = match rng.random_range(0..3u32) {
                 0 => ReceivedOutputPool::Transparent,
                 1 => ReceivedOutputPool::Sapling {
-                    witness: crate::sapling::SaplingWitness::opt_random(),
+                    tree_data: CommitmentTreeData::opt_random(),
                     nullifier: Some(Blob::random()),
                 },
                 _ => ReceivedOutputPool::Orchard {
-                    witness: crate::orchard::OrchardWitness::opt_random(),
+                    tree_data: CommitmentTreeData::opt_random(),
                     nullifier: Some(Blob::random()),
                 },
             };
@@ -209,4 +310,16 @@ mod tests {
     }
 
     test_envelope_roundtrip!(ReceivedOutput);
+    test_envelope_roundtrip!(
+        CommitmentTreeData<SaplingWitness>,
+        20,
+        false,
+        test_commitment_tree_data_sapling
+    );
+    test_envelope_roundtrip!(
+        CommitmentTreeData<OrchardWitness>,
+        20,
+        false,
+        test_commitment_tree_data_orchard
+    );
 }
