@@ -29,8 +29,7 @@ impl SproutViewingKey {
 
 impl From<SproutViewingKey> for Envelope {
     fn from(value: SproutViewingKey) -> Self {
-        Envelope::new(value.data)
-            .add_type("SproutViewingKey")
+        Envelope::new(value.data).add_type("SproutViewingKey")
     }
 }
 
@@ -66,8 +65,7 @@ impl SproutSpendingKey {
 
 impl From<SproutSpendingKey> for Envelope {
     fn from(value: SproutSpendingKey) -> Self {
-        Envelope::new(value.data)
-            .add_type("SproutSpendingKey")
+        Envelope::new(value.data).add_type("SproutSpendingKey")
     }
 }
 
@@ -92,7 +90,9 @@ pub struct SproutAddress {
 
 impl SproutAddress {
     pub fn new(address: impl Into<String>) -> Self {
-        Self { address: address.into() }
+        Self {
+            address: address.into(),
+        }
     }
 
     pub fn address(&self) -> &str {
@@ -102,8 +102,7 @@ impl SproutAddress {
 
 impl From<SproutAddress> for Envelope {
     fn from(value: SproutAddress) -> Self {
-        Envelope::new(value.address)
-            .add_type("SproutAddress")
+        Envelope::new(value.address).add_type("SproutAddress")
     }
 }
 
@@ -140,21 +139,21 @@ impl crate::RandomInstance for SproutAddress {
 
 #[cfg(test)]
 mod viewing_key_tests {
-    use crate::test_envelope_roundtrip;
     use super::SproutViewingKey;
+    use crate::test_envelope_roundtrip;
     test_envelope_roundtrip!(SproutViewingKey);
 }
 
 #[cfg(test)]
 mod spending_key_tests {
-    use crate::test_envelope_roundtrip;
     use super::SproutSpendingKey;
+    use crate::test_envelope_roundtrip;
     test_envelope_roundtrip!(SproutSpendingKey);
 }
 
 #[cfg(test)]
 mod address_tests {
-    use crate::test_envelope_roundtrip;
     use super::SproutAddress;
+    use crate::test_envelope_roundtrip;
     test_envelope_roundtrip!(SproutAddress);
 }
