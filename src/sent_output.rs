@@ -1,9 +1,7 @@
 use bc_envelope::prelude::*;
 
 use crate::{
-    Indexed,
-    orchard::OrchardSentOutput,
-    sapling::SaplingSentOutput,
+    Indexed, orchard::OrchardSentOutput, sapling::SaplingSentOutput,
     transparent::TransparentSentOutput,
 };
 
@@ -11,7 +9,11 @@ use crate::{
 ///
 /// Groups the pool-specific sent output types into a single enum for
 /// uniform storage in the txid-grouped sent output map.
+///
+/// This enum is non-exhaustive because future network upgrades may add
+/// pools.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum SentOutput {
     Transparent(TransparentSentOutput),
     Sapling(SaplingSentOutput),
@@ -72,9 +74,10 @@ impl TryFrom<Envelope> for SentOutput {
                 let output = OrchardSentOutput::try_from(envelope)?;
                 Ok(SentOutput::Orchard(output))
             }
-            other => Err(bc_envelope::Error::General(
-                format!("unknown sent output pool: {}", other),
-            )),
+            other => Err(bc_envelope::Error::General(format!(
+                "unknown sent output pool: {}",
+                other
+            ))),
         }
     }
 }
@@ -90,15 +93,9 @@ mod tests {
             use rand::Rng;
             let mut rng = rand::rng();
             match rng.random_range(0..3u32) {
-                0 => SentOutput::Transparent(
-                    crate::transparent::TransparentSentOutput::random(),
-                ),
-                1 => SentOutput::Sapling(
-                    crate::sapling::SaplingSentOutput::random(),
-                ),
-                _ => SentOutput::Orchard(
-                    crate::orchard::OrchardSentOutput::random(),
-                ),
+                0 => SentOutput::Transparent(crate::transparent::TransparentSentOutput::random()),
+                1 => SentOutput::Sapling(crate::sapling::SaplingSentOutput::random()),
+                _ => SentOutput::Orchard(crate::orchard::OrchardSentOutput::random()),
             }
         }
     }

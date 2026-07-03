@@ -425,7 +425,10 @@ mod tests {
                     .map(|i| {
                         ReceivedOutput::new(
                             i as u32,
-                            crate::ReceivedOutputPool::Transparent,
+                            crate::ReceivedOutputPool::Transparent {
+                                script: None,
+                                max_observed_unspent_height: None,
+                            },
                             crate::Amount::random(),
                         )
                     })

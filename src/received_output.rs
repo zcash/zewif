@@ -1,6 +1,8 @@
 use bc_envelope::prelude::*;
 
-use crate::{Amount, Blob, Memo, TxId, orchard::OrchardWitness, sapling::SaplingWitness};
+use crate::{
+    Amount, Blob, BlockHeight, Memo, Script, TxId, orchard::OrchardWitness, sapling::SaplingWitness,
+};
 
 /// A received output within a transaction that belongs to an account.
 ///
@@ -79,9 +81,28 @@ where
 
 /// Identifies which pool a received output belongs to and carries
 /// pool-specific metadata.
+///
+/// This enum is non-exhaustive because future network upgrades may add
+/// pools.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ReceivedOutputPool {
-    Transparent,
+    /// These fields support representing UTXOs whose containing
+    /// transaction's full data is unavailable; when the raw transaction is
+    /// available it is authoritative for the script.
+    Transparent {
+        script: Option<Script>,
+        /// The greatest block height at which this output was observed
+        /// unspent (maps to zcash_client_sqlite
+        /// transparent_received_outputs.max_observed_unspent_height).
+        max_observed_unspent_height: Option<BlockHeight>,
+    },
+    /// For Sprout, output_index identifies the JoinSplit output as
+    /// 2 * joinsplit_index + output_index_within_joinsplit (every JoinSplit
+    /// has exactly two outputs). Sprout note spendability is not
+    /// reconstructible from this data alone; a Sprout-capable importer must
+    /// rescan.
+    Sprout { nullifier: Option<Blob<32>> },
     Sapling {
         tree_data: Option<CommitmentTreeData<SaplingWitness>>,
         nullifier: Option<Blob<32>>,
@@ -167,7 +188,27 @@ impl From<ReceivedOutput> for Envelope {
             .add_type("ReceivedOutput")
             .add_assertion("value", value.value);
         let e = match value.pool {
-            ReceivedOutputPool::Transparent => e.add_assertion("pool", "transparent"),
+            ReceivedOutputPool::Transparent {
+                script,
+                max_observed_unspent_height,
+            } => {
+                let e = e.add_assertion("pool", "transparent");
+                let e = match script {
+                    Some(s) => e.add_assertion("script", s),
+                    None => e,
+                };
+                match max_observed_unspent_height {
+                    Some(h) => e.add_assertion("max_observed_unspent_height", h),
+                    None => e,
+                }
+            }
+            ReceivedOutputPool::Sprout { nullifier } => {
+                let e = e.add_assertion("pool", "sprout");
+                match nullifier {
+                    Some(nf) => e.add_assertion("nullifier", nf),
+                    None => e,
+                }
+            }
             ReceivedOutputPool::Sapling {
                 tree_data,
                 nullifier,
@@ -222,7 +263,19 @@ impl TryFrom<Envelope> for ReceivedOutput {
         let value: Amount = envelope.extract_object_for_predicate("value")?;
         let pool_tag: String = envelope.extract_object_for_predicate("pool")?;
         let pool = match pool_tag.as_str() {
-            "transparent" => ReceivedOutputPool::Transparent,
+            "transparent" => {
+                let script = envelope.extract_optional_object_for_predicate("script")?;
+                let max_observed_unspent_height = envelope
+                    .extract_optional_object_for_predicate("max_observed_unspent_height")?;
+                ReceivedOutputPool::Transparent {
+                    script,
+                    max_observed_unspent_height,
+                }
+            }
+            "sprout" => {
+                let nullifier = envelope.try_optional_object_for_predicate("nullifier")?;
+                ReceivedOutputPool::Sprout { nullifier }
+            }
             "sapling" => {
                 let tree_data = envelope.try_optional_object_for_predicate("tree_data")?;
                 let nullifier = envelope.try_optional_object_for_predicate("nullifier")?;
@@ -267,7 +320,10 @@ mod tests {
     use crate::test_envelope_roundtrip;
 
     use super::{CommitmentTreeData, ReceivedOutput, ReceivedOutputPool};
-    use crate::{Amount, Blob, Memo, TxId, orchard::OrchardWitness, sapling::SaplingWitness};
+    use crate::{
+        Amount, Blob, BlockHeight, Memo, Script, TxId, orchard::OrchardWitness,
+        sapling::SaplingWitness,
+    };
 
     impl<W: crate::RandomInstance> crate::RandomInstance for CommitmentTreeData<W> {
         fn random() -> Self {
@@ -286,9 +342,15 @@ mod tests {
             use rand::Rng;
             let mut rng = rand::rng();
             let output_index = rng.random_range(0..100u32);
-            let pool = match rng.random_range(0..3u32) {
-                0 => ReceivedOutputPool::Transparent,
-                1 => ReceivedOutputPool::Sapling {
+            let pool = match rng.random_range(0..4u32) {
+                0 => ReceivedOutputPool::Transparent {
+                    script: Script::opt_random(),
+                    max_observed_unspent_height: BlockHeight::opt_random(),
+                },
+                1 => ReceivedOutputPool::Sprout {
+                    nullifier: Blob::opt_random(),
+                },
+                2 => ReceivedOutputPool::Sapling {
                     tree_data: CommitmentTreeData::opt_random(),
                     nullifier: Some(Blob::random()),
                 },
