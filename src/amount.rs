@@ -358,7 +358,7 @@ mod tests {
         fn random() -> Self {
             let mut rng = bc_rand::thread_rng();
             let value =
-                rand::Rng::gen_range(&mut rng, -MAX_BALANCE..=MAX_BALANCE);
+                rand::Rng::random_range(&mut rng, -MAX_BALANCE..=MAX_BALANCE);
             Self(value)
         }
     }

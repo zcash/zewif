@@ -47,14 +47,20 @@ macro_rules! data {
             }
 
             /// Returns the number of bytes in this data container.
-            pub fn len(&self) -> usize { self.0.len() }
+            pub fn len(&self) -> usize {
+                self.0.len()
+            }
 
             /// Returns `true` if this data container is empty (contains no
             /// bytes).
-            pub fn is_empty(&self) -> bool { self.0.is_empty() }
+            pub fn is_empty(&self) -> bool {
+                self.0.is_empty()
+            }
 
             /// Converts this data to a `Vec<u8>`, creating a copy.
-            pub fn to_vec(&self) -> Vec<u8> { self.0.to_vec() }
+            pub fn to_vec(&self) -> Vec<u8> {
+                self.0.to_vec()
+            }
 
             /// Creates an instance from a slice of bytes.
             pub fn from_slice(data: &[u8]) -> Self {
@@ -77,7 +83,9 @@ macro_rules! data {
         }
 
         impl Clone for $name {
-            fn clone(&self) -> Self { Self(self.0.clone()) }
+            fn clone(&self) -> Self {
+                Self(self.0.clone())
+            }
         }
 
         impl std::fmt::Debug for $name {
@@ -87,33 +95,47 @@ macro_rules! data {
         }
 
         impl Default for $name {
-            fn default() -> Self { Self($crate::Data::default()) }
+            fn default() -> Self {
+                Self($crate::Data::default())
+            }
         }
 
         impl PartialEq for $name {
-            fn eq(&self, other: &Self) -> bool { self.0.eq(&other.0) }
+            fn eq(&self, other: &Self) -> bool {
+                self.0.eq(&other.0)
+            }
         }
 
         impl Eq for $name {}
 
         impl AsRef<[u8]> for $name {
-            fn as_ref(&self) -> &[u8] { self.0.as_ref() }
+            fn as_ref(&self) -> &[u8] {
+                self.0.as_ref()
+            }
         }
 
         impl From<$name> for Vec<u8> {
-            fn from(data: $name) -> Vec<u8> { data.to_vec() }
+            fn from(data: $name) -> Vec<u8> {
+                data.to_vec()
+            }
         }
 
         impl From<&$name> for Vec<u8> {
-            fn from(data: &$name) -> Vec<u8> { data.to_vec() }
+            fn from(data: &$name) -> Vec<u8> {
+                data.to_vec()
+            }
         }
 
         impl From<Vec<u8>> for $name {
-            fn from(data: Vec<u8>) -> Self { Self::from_vec(data) }
+            fn from(data: Vec<u8>) -> Self {
+                Self::from_vec(data)
+            }
         }
 
         impl From<&[u8]> for $name {
-            fn from(data: &[u8]) -> Self { Self::from_slice(data) }
+            fn from(data: &[u8]) -> Self {
+                Self::from_slice(data)
+            }
         }
 
         impl From<$name> for bc_envelope::prelude::CBOR {
@@ -131,9 +153,7 @@ macro_rules! data {
         impl TryFrom<bc_envelope::prelude::CBOR> for $name {
             type Error = dcbor::Error;
 
-            fn try_from(
-                cbor: bc_envelope::prelude::CBOR,
-            ) -> Result<Self, Self::Error> {
+            fn try_from(cbor: bc_envelope::prelude::CBOR) -> Result<Self, Self::Error> {
                 let bytes = cbor.try_into_byte_string()?;
                 Ok(Self::from_slice(&bytes))
             }
@@ -141,7 +161,9 @@ macro_rules! data {
 
         #[cfg(test)]
         impl $crate::RandomInstance for $name {
-            fn random() -> Self { Self($crate::Data::random()) }
+            fn random() -> Self {
+                Self($crate::Data::random())
+            }
         }
     };
 }

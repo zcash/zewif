@@ -205,8 +205,8 @@ mod tests {
 
     impl crate::RandomInstance for ProtocolAddress {
         fn random() -> Self {
-            let mut rng = rand::thread_rng();
-            let choice = rand::Rng::gen_range(&mut rng, 0..3);
+            let mut rng = rand::rng();
+            let choice = rand::Rng::random_range(&mut rng, 0..3);
             match choice {
                 0 => {
                     ProtocolAddress::Transparent(transparent::Address::random())

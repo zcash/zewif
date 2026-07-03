@@ -62,14 +62,14 @@ impl RandomInstance for usize {
 impl RandomInstance for String {
     fn random() -> Self {
         let mut rng = bc_rand::thread_rng();
-        let len = rand::Rng::gen_range(&mut rng, 10..=100);
+        let len = rand::Rng::random_range(&mut rng, 10..=100);
         let alphabet =
             "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         let mut s = String::new();
         for _ in 0..len {
             let c = alphabet
                 .chars()
-                .nth(rand::Rng::gen_range(&mut rng, 0..alphabet.len()))
+                .nth(rand::Rng::random_range(&mut rng, 0..alphabet.len()))
                 .unwrap();
             s.push(c);
         }
@@ -83,7 +83,7 @@ where
 {
     fn random() -> Self {
         let mut rng = bc_rand::thread_rng();
-        let len = rand::Rng::gen_range(&mut rng, 1..=5);
+        let len = rand::Rng::random_range(&mut rng, 1..=5);
         (0..len).map(|_| T::random()).collect()
     }
 }
@@ -95,7 +95,7 @@ where
 {
     fn random() -> Self {
         let mut rng = bc_rand::thread_rng();
-        let len = rand::Rng::gen_range(&mut rng, 1..=10);
+        let len = rand::Rng::random_range(&mut rng, 1..=10);
         (0..len).map(|_| (K::random(), V::random())).collect()
     }
 }
@@ -106,7 +106,7 @@ where
 {
     fn random() -> Self {
         let mut rng = bc_rand::thread_rng();
-        let len = rand::Rng::gen_range(&mut rng, 1..=10);
+        let len = rand::Rng::random_range(&mut rng, 1..=10);
         (0..len).map(|_| T::random()).collect()
     }
 }
@@ -180,7 +180,7 @@ impl RandomInstance for Attachments {
     fn random() -> Self {
         let mut attachments = Attachments::new();
         let mut rng = bc_rand::thread_rng();
-        let len = rand::Rng::gen_range(&mut rng, 0..=3);
+        let len = rand::Rng::random_range(&mut rng, 0..=3);
         for _ in 0..len {
             attachments.add(
                 String::random(),
