@@ -9,9 +9,9 @@
 //! representations, both seed material forms, regtest network parameters,
 //! chain-state frontiers, and extension maps at every level.
 //!
-//! Not covered: the `incremental-witness` production (`SaplingWitness` /
-//! `OrchardWitness` expose no public constructor, so an external crate can
-//! only produce the `tree-position` variant of `commitment-tree-data`).
+//! The `incremental-witness` production is covered via the golden fixture
+//! document (`tests/fixtures/v1/full.zewif`), whose payload is validated
+//! against the schema below.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -381,6 +381,27 @@ fn encrypted_secrets_document_conforms_to_schema() {
     if let Err(diagnostics) = cddl_cat::validate_cbor_bytes("zewif", &schema, &bytes) {
         panic!(
             "the emitted CBOR does not conform to docs/zewif.cddl:\n{}",
+            diagnostics
+        );
+    }
+}
+
+/// The full golden fixture document's payload conforms to the schema. This
+/// ties the byte-exact fixture suite to the schema validator and covers
+/// productions the in-test document does not construct (notably
+/// `incremental-witness`, present in the fixture in both shielded pools).
+#[test]
+fn golden_fixture_payload_conforms_to_schema() {
+    let schema = load_schema();
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let document = std::fs::read(manifest_dir.join("tests/fixtures/v1/full.zewif"))
+        .expect("golden fixture is readable");
+    // Strip the container header: 5 magic bytes + 4-byte LE version.
+    let payload = &document[zewif::MAGIC_BYTES.len() + 4..];
+
+    if let Err(diagnostics) = cddl_cat::validate_cbor_bytes("zewif", &schema, payload) {
+        panic!(
+            "the golden fixture payload does not conform to docs/zewif.cddl:\n{}",
             diagnostics
         );
     }
