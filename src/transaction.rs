@@ -22,6 +22,14 @@ pub struct Transaction {
     fee: Option<Amount>,
     /// The expiry height for this transaction, if known.
     expiry_height: Option<BlockHeight>,
+    /// The wallet-local timestamp associated with this transaction, in seconds
+    /// since the Unix epoch: its creation time for wallet-authored transactions,
+    /// or the time it was first received or observed (zcashd's nTimeReceived).
+    created_time: Option<i64>,
+    /// Whether the user has explicitly marked this transaction as trusted,
+    /// making its outputs spendable under the trusted confirmations policy
+    /// of ZIP 315.
+    trusted: bool,
     attachments: Attachments,
 }
 
@@ -37,6 +45,8 @@ impl Transaction {
             block_position: None,
             fee: None,
             expiry_height: None,
+            created_time: None,
+            trusted: false,
             attachments: Attachments::new(),
         }
     }
@@ -92,6 +102,22 @@ impl Transaction {
     pub fn set_expiry_height(&mut self, height: BlockHeight) {
         self.expiry_height = Some(height);
     }
+
+    pub fn created_time(&self) -> Option<i64> {
+        self.created_time
+    }
+
+    pub fn set_created_time(&mut self, created_time: i64) {
+        self.created_time = Some(created_time);
+    }
+
+    pub fn is_trusted(&self) -> bool {
+        self.trusted
+    }
+
+    pub fn set_trusted(&mut self, trusted: bool) {
+        self.trusted = trusted;
+    }
 }
 
 #[rustfmt::skip]
@@ -104,7 +130,13 @@ impl From<Transaction> for Envelope {
             .add_optional_assertion("mined_height", value.mined_height)
             .add_optional_assertion("block_position", value.block_position)
             .add_optional_assertion("fee", value.fee)
-            .add_optional_assertion("expiry_height", value.expiry_height);
+            .add_optional_assertion("expiry_height", value.expiry_height)
+            .add_optional_assertion("created_time", value.created_time);
+        let e = if value.trusted {
+            e.add_assertion("trusted", true)
+        } else {
+            e
+        };
         value.attachments.add_to_envelope(e)
     }
 }
@@ -121,6 +153,10 @@ impl TryFrom<Envelope> for Transaction {
         let block_position = envelope.try_optional_object_for_predicate("block_position")?;
         let fee = envelope.try_optional_object_for_predicate("fee")?;
         let expiry_height = envelope.try_optional_object_for_predicate("expiry_height")?;
+        let created_time = envelope.extract_optional_object_for_predicate("created_time")?;
+        let trusted = envelope
+            .extract_optional_object_for_predicate::<bool>("trusted")?
+            .unwrap_or(false);
         let attachments = Attachments::try_from_envelope(&envelope)
             .map_err(|e| bc_envelope::Error::General(format!("attachments: {}", e)))?;
 
@@ -132,6 +168,8 @@ impl TryFrom<Envelope> for Transaction {
             block_position,
             fee,
             expiry_height,
+            created_time,
+            trusted,
             attachments,
         })
     }
@@ -143,12 +181,13 @@ mod tests {
 
     use super::Transaction;
     use crate::{
-        Amount, BlockHeight, TransactionData, TxBlockPosition, TxId,
-        test_envelope_roundtrip,
+        Amount, BlockHeight, TransactionData, TxBlockPosition, TxId, test_envelope_roundtrip,
     };
 
     impl crate::RandomInstance for Transaction {
         fn random() -> Self {
+            use rand::Rng;
+            let mut rng = rand::rng();
             Self {
                 txid: TxId::random(),
                 tx_data: TransactionData::opt_random(),
@@ -157,6 +196,10 @@ mod tests {
                 block_position: TxBlockPosition::opt_random(),
                 fee: Amount::opt_random(),
                 expiry_height: BlockHeight::opt_random(),
+                created_time: rng
+                    .random_bool(0.5)
+                    .then(|| rng.random_range(0..=2_000_000_000i64)),
+                trusted: rng.random_bool(0.3),
                 attachments: Attachments::random(),
             }
         }
