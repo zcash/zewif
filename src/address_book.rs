@@ -12,7 +12,7 @@ pub struct AddressBookEntry {
     address: String,
     /// User-assigned name for the address (zcashd address book name records).
     label: Option<String>,
-    /// Usage tag, e.g. "receive", "send", "refund" (zcashd purpose records).
+    /// Usage tag, e.g. "receive", "send", "unknown" (zcashd purpose records).
     purpose: Option<String>,
     attachments: Attachments,
 }

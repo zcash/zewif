@@ -45,13 +45,18 @@ pub struct Account {
     /// Hash of the birthday block, for chain verification.
     birthday_block: Option<BlockHash>,
 
-    /// Tree state at a block at or before `birthday_height` from which
-    /// scanning may begin (maps to librustzcash `AccountBirthday`
-    /// prior_chain_state). Exporters without chain access omit it.
+    /// Tree state at the end of a block strictly before `birthday_height`
+    /// — canonically the block immediately preceding it. Scanning begins at
+    /// the following block, so a state at `birthday_height` itself would
+    /// cause the birthday block to be skipped (maps to librustzcash
+    /// `AccountBirthday` prior_chain_state). Exporters without chain access
+    /// omit it.
     birthday_chain_state: Option<ChainState>,
 
-    /// Height below which recovery of this account's history is considered
-    /// complete (maps to zcash_client_sqlite accounts.recover_until_height).
+    /// Height (exclusive) up to which scanning of this account's history
+    /// counts as recovery rather than regular scanning; typically the chain
+    /// tip at the time recovery was initiated (maps to zcash_client_sqlite
+    /// accounts.recover_until_height).
     recover_until_height: Option<BlockHeight>,
 
     /// The capability of the account in the source wallet; `None` = unknown.
