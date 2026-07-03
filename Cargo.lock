@@ -2194,7 +2194,6 @@ dependencies = [
  "bc-crypto 0.13.0",
  "bc-envelope",
  "bc-rand 0.5.0",
- "chrono",
  "dcbor",
  "hex",
  "rand 0.9.2",
