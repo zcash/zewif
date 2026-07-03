@@ -21,6 +21,16 @@ pub enum SentOutput {
 }
 
 impl SentOutput {
+    /// Returns the index of the underlying sent output within its pool's
+    /// output list in the transaction.
+    pub fn output_index(&self) -> u32 {
+        match self {
+            SentOutput::Transparent(o) => o.output_index(),
+            SentOutput::Sapling(o) => o.output_index(),
+            SentOutput::Orchard(o) => o.output_index(),
+        }
+    }
+
     /// Returns the index of the underlying sent output.
     pub fn index(&self) -> usize {
         match self {

@@ -11,6 +11,10 @@ use crate::{Amount, Indexed};
 pub struct TransparentSentOutput {
     index: usize,
 
+    /// Index of the output within the transaction's transparent output
+    /// (vout) list (maps to zcash_client_sqlite sent_notes.output_index).
+    output_index: u32,
+
     /// The recipient transparent address string.
     recipient_address: String,
 
@@ -30,14 +34,24 @@ impl Indexed for TransparentSentOutput {
 impl TransparentSentOutput {
     pub fn from_parts(
         index: usize,
+        output_index: u32,
         recipient_address: String,
         value: Amount,
     ) -> Self {
         Self {
             index,
+            output_index,
             recipient_address,
             value,
         }
+    }
+
+    pub fn output_index(&self) -> u32 {
+        self.output_index
+    }
+
+    pub fn set_output_index(&mut self, output_index: u32) {
+        self.output_index = output_index;
     }
 
     pub fn recipient_address(&self) -> &str {
@@ -61,6 +75,7 @@ impl From<TransparentSentOutput> for Envelope {
     fn from(value: TransparentSentOutput) -> Self {
         Envelope::new(value.index)
             .add_type("TransparentSentOutput")
+            .add_assertion("output_index", value.output_index)
             .add_assertion("recipient_address", value.recipient_address)
             .add_assertion("value", value.value)
     }
@@ -72,11 +87,13 @@ impl TryFrom<Envelope> for TransparentSentOutput {
     fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
         envelope.check_type("TransparentSentOutput")?;
         let index = envelope.extract_subject()?;
+        let output_index = envelope.extract_object_for_predicate("output_index")?;
         let recipient_address = envelope.extract_object_for_predicate("recipient_address")?;
         let value = envelope.extract_object_for_predicate("value")?;
 
         Ok(TransparentSentOutput {
             index,
+            output_index,
             recipient_address,
             value,
         })
@@ -93,6 +110,7 @@ mod tests {
         fn random() -> Self {
             Self {
                 index: 0,
+                output_index: u32::random() % 100,
                 recipient_address: String::random(),
                 value: Amount::random(),
             }

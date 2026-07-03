@@ -10,6 +10,10 @@ use crate::{Amount, Indexed, Memo};
 pub struct SaplingSentOutput {
     index: usize,
 
+    /// Index of the output within the transaction's Sapling output list
+    /// (maps to zcash_client_sqlite sent_notes.output_index).
+    output_index: u32,
+
     /// The recipient address string (a Sapling address or a unified address
     /// with a Sapling receiver). Preserved verbatim because unified address
     /// encoding includes receivers that can't be reconstructed from the
@@ -35,6 +39,7 @@ impl SaplingSentOutput {
     pub fn new() -> Self {
         Self {
             index: 0,
+            output_index: 0,
             recipient_address: "".to_string(),
             value: Amount::zero(),
             memo: None,
@@ -43,16 +48,26 @@ impl SaplingSentOutput {
 
     pub fn from_parts(
         index: usize,
+        output_index: u32,
         recipient_address: String,
         value: Amount,
         memo: Option<Memo>,
     ) -> Self {
         Self {
             index,
+            output_index,
             recipient_address,
             value,
             memo,
         }
+    }
+
+    pub fn output_index(&self) -> u32 {
+        self.output_index
+    }
+
+    pub fn set_output_index(&mut self, output_index: u32) {
+        self.output_index = output_index;
     }
 
     pub fn recipient_address(&self) -> &str {
@@ -90,6 +105,7 @@ impl From<SaplingSentOutput> for Envelope {
     fn from(value: SaplingSentOutput) -> Self {
         Envelope::new(value.index)
             .add_type("SaplingSentOutput")
+            .add_assertion("output_index", value.output_index)
             .add_assertion("recipient_address", value.recipient_address)
             .add_assertion("value", value.value)
             .add_optional_assertion("memo", value.memo)
@@ -102,12 +118,14 @@ impl TryFrom<Envelope> for SaplingSentOutput {
     fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
         envelope.check_type("SaplingSentOutput")?;
         let index = envelope.extract_subject()?;
+        let output_index = envelope.extract_object_for_predicate("output_index")?;
         let recipient_address = envelope.extract_object_for_predicate("recipient_address")?;
         let value = envelope.extract_object_for_predicate("value")?;
         let memo = envelope.extract_optional_object_for_predicate("memo")?;
 
         Ok(SaplingSentOutput {
             index,
+            output_index,
             recipient_address,
             value,
             memo,
@@ -124,6 +142,7 @@ mod tests {
         fn random() -> Self {
             Self {
                 index: 0,
+                output_index: u32::random() % 100,
                 recipient_address: String::random(),
                 value: Amount::random(),
                 memo: Some(Memo::random()),
