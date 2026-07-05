@@ -161,13 +161,9 @@ impl<'b, C> minicbor::Decode<'b, C> for Script {
         d: &mut minicbor::Decoder<'b>,
         _ctx: &mut C,
     ) -> Result<Self, minicbor::decode::Error> {
-        let bytes = d.bytes()?;
-        if bytes.len() > 0xffff {
-            return Err(minicbor::decode::Error::message(
-                "script length exceeds maximum size of 65535 bytes",
-            ));
-        }
-        Ok(Script(Data::from_slice(bytes)))
+        // The schema places no `.size` bound on a script byte string, and the
+        // encoder emits any length, so the decoder must accept any length too.
+        Ok(Script(Data::from_slice(d.bytes()?)))
     }
 }
 
