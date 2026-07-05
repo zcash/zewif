@@ -14,10 +14,11 @@ pub enum AccountViewingKey {
     /// contain Orchard, Sapling, and/or transparent components.
     #[n(0)]
     Ufvk(#[n(0)] UnifiedFullViewingKey),
-    /// A standalone Sapling extended full viewing key (canonical encoding).
+    /// A standalone Sapling extended full viewing key (canonical ZIP 32
+    /// encoding).
     #[n(1)]
-    SaplingExtFvk(#[n(0)] SaplingExtFvk),
-    /// A Sprout viewing key (64 bytes: `a_pk` + `sk_enc`). Sufficient to
+    SaplingExtFvk(#[n(0)] SaplingExtendedFullViewingKey),
+    /// A Sprout viewing key in its canonical encoding. Sufficient to
     /// detect incoming Sprout notes.
     #[n(2)]
     SproutViewingKey(#[n(0)] SproutViewingKey),
@@ -27,36 +28,11 @@ pub enum AccountViewingKey {
     TransparentAddressSet,
 }
 
-/// A standalone Sapling extended full viewing key in its canonical ZIP 32
-/// encoding.
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
-#[cbor(map)]
-pub struct SaplingExtFvk {
-    #[n(0)]
-    fvk: SaplingExtendedFullViewingKey,
-}
-
-impl SaplingExtFvk {
-    pub fn new(fvk: SaplingExtendedFullViewingKey) -> Self {
-        Self { fvk }
-    }
-
-    pub fn fvk(&self) -> &SaplingExtendedFullViewingKey {
-        &self.fvk
-    }
-}
-
-impl From<SaplingExtendedFullViewingKey> for SaplingExtFvk {
-    fn from(fvk: SaplingExtendedFullViewingKey) -> Self {
-        Self::new(fvk)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::{RandomInstance, test_cbor_roundtrip};
 
-    use super::{AccountViewingKey, SaplingExtFvk};
+    use super::AccountViewingKey;
 
     impl RandomInstance for AccountViewingKey {
         fn random() -> Self {
@@ -64,9 +40,9 @@ mod tests {
             let mut rng = rand::rng();
             match rng.random_range(0..4u32) {
                 0 => AccountViewingKey::Ufvk(crate::UnifiedFullViewingKey::random()),
-                1 => AccountViewingKey::SaplingExtFvk(SaplingExtFvk::new(
+                1 => AccountViewingKey::SaplingExtFvk(
                     crate::sapling::SaplingExtendedFullViewingKey::random(),
-                )),
+                ),
                 2 => AccountViewingKey::SproutViewingKey(crate::sprout::SproutViewingKey::random()),
                 _ => AccountViewingKey::TransparentAddressSet,
             }

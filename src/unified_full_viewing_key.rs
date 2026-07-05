@@ -6,21 +6,16 @@ use minicbor::{Decode, Encode};
 /// Sapling, Orchard) into a single key. The encoded string is the
 /// canonical representation and can be parsed by any UFVK-aware wallet.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
-#[cbor(map)]
-pub struct UnifiedFullViewingKey {
-    #[n(0)]
-    encoding: String,
-}
+#[cbor(transparent)]
+pub struct UnifiedFullViewingKey(#[n(0)] String);
 
 impl UnifiedFullViewingKey {
     pub fn new(encoding: impl Into<String>) -> Self {
-        Self {
-            encoding: encoding.into(),
-        }
+        Self(encoding.into())
     }
 
     pub fn encoding(&self) -> &str {
-        &self.encoding
+        &self.0
     }
 }
 
@@ -33,9 +28,7 @@ mod tests {
     impl RandomInstance for UnifiedFullViewingKey {
         fn random() -> Self {
             // Use a placeholder UFVK-like string for testing
-            Self {
-                encoding: format!("uview1{}", String::random()),
-            }
+            Self(format!("uview1{}", String::random()))
         }
     }
 

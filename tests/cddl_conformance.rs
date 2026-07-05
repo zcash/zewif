@@ -21,11 +21,11 @@ use zewif::{
     BlockHash, BlockHeight, ChainState, CommitmentTreeData, CompactTxData, Data, DerivationInfo,
     DerivedKeySource, DiversifierIndex, ExportId, Frontier, FrontierData, KeyScope, KeySource,
     LegacySeed, Memo, MerkleNode, MnemonicLanguage, Network, Nullifier, OrchardOutputData,
-    ProtocolAddress, RawTxData, ReceivedOutput, ReceivedOutputPool, RegtestParams, SaplingExtFvk,
-    SaplingKeyEntry, SaplingOutputData, ScanRange, Script, SecretStore, Secrets, SeedEntry,
-    SeedFingerprint, SeedMaterial, SentOutput, SproutKeyEntry, SproutOutputData, Transaction,
-    TransactionData, TransparentKeyEntry, TransparentOutputData, TreePosition, TxBlockPosition,
-    TxId, UnifiedAddress, UnifiedFullViewingKey, Zewif, ZewifWallet, orchard, sapling, sprout,
+    ProtocolAddress, RawTxData, ReceivedOutput, ReceivedOutputPool, RegtestParams, SaplingKeyEntry,
+    SaplingOutputData, ScanRange, Script, SecretStore, Secrets, SeedEntry, SeedFingerprint,
+    SeedMaterial, SentOutput, SproutKeyEntry, SproutOutputData, Transaction, TransactionData,
+    TransparentKeyEntry, TransparentOutputData, TreePosition, TxBlockPosition, TxId,
+    UnifiedAddress, UnifiedFullViewingKey, Zewif, ZewifWallet, orchard, sapling, sprout,
     transparent,
 };
 
@@ -185,9 +185,9 @@ fn ufvk_account(txid1: TxId, txid2: TxId) -> Account {
 
 /// A view-only account with a standalone Sapling extended full viewing key.
 fn sapling_account() -> Account {
-    let mut account = Account::new(AccountViewingKey::SaplingExtFvk(SaplingExtFvk::new(
+    let mut account = Account::new(AccountViewingKey::SaplingExtFvk(
         sapling::SaplingExtendedFullViewingKey::new([0x73; 169]),
-    )));
+    ));
     account.set_name("sapling import");
     account.set_key_source(KeySource::Imported);
     account.set_purpose(AccountPurpose::ViewOnly);
@@ -201,7 +201,7 @@ fn sapling_account() -> Account {
 /// A legacy Sprout account.
 fn sprout_account() -> Account {
     let mut account = Account::new(AccountViewingKey::SproutViewingKey(
-        sprout::SproutViewingKey::new(Data::from_slice(&[0x64; 64])),
+        sprout::SproutViewingKey::new([0x64; 67]),
     ));
     account.set_name("sprout legacy");
     account.add_address(Address::new(ProtocolAddress::Sprout(
@@ -226,10 +226,10 @@ fn transparent_set_account() -> Account {
 }
 
 /// A byte string with the shape of a compressed secp256k1 public key.
-fn pubkey_bytes(prefix: u8) -> Data {
+fn pubkey_bytes(prefix: u8) -> transparent::TransparentPubKey {
     let mut pk = vec![prefix];
     pk.extend_from_slice(&[0x42; 32]);
-    Data::from_vec(pk)
+    transparent::TransparentPubKey::from_bytes(pk).expect("valid pubkey")
 }
 
 /// An extension value: a byte string containing a single embedded CBOR
@@ -284,19 +284,19 @@ fn secret_store() -> SecretStore {
     ));
     store.add_seed(SeedEntry::new(
         SeedFingerprint::new([0x60; 32]),
-        SeedMaterial::LegacySeed(LegacySeed::new(Data::from_slice(&[0x99; 32]))),
+        SeedMaterial::LegacySeed(LegacySeed::new([0x99; 32])),
     ));
     store.add_transparent_key(TransparentKeyEntry::new(
         pubkey_bytes(0x02),
         transparent::TransparentSpendingKey::new([0x77; 32]),
     ));
     store.add_sapling_key(SaplingKeyEntry::new(
-        Data::from_slice(&[0x73; 169]),
+        sapling::SaplingExtendedFullViewingKey::new([0x73; 169]),
         sapling::SaplingExtendedSpendingKey::new([0x69; 169]),
     ));
     store.add_sprout_key(SproutKeyEntry::new(
         "zcconformancesproutaddress",
-        sprout::SproutSpendingKey::new(Data::from_slice(&[0x88; 32])),
+        sprout::SproutSpendingKey::new([0x88; 34]),
     ));
     store
         .extensions_mut()

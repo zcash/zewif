@@ -6,6 +6,29 @@ use minicbor::{Encode, Encoder};
 
 use crate::Data;
 
+/// A single extension value: the bytes of one embedded CBOR data item
+/// (the semantics of RFC 8949 tag 24).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Encode, Decode)]
+#[cbor(transparent)]
+pub struct ExtensionValue(#[n(0)] Data);
+
+impl ExtensionValue {
+    pub fn new(encoded_cbor: Data) -> Self {
+        Self(encoded_cbor)
+    }
+
+    /// The bytes of the embedded CBOR data item.
+    pub fn as_data(&self) -> &Data {
+        &self.0
+    }
+}
+
+impl From<Data> for ExtensionValue {
+    fn from(encoded_cbor: Data) -> Self {
+        Self(encoded_cbor)
+    }
+}
+
 /// Vendor-namespaced extension data attached to a ZeWIF record.
 ///
 /// Entries are keyed first by a vendor identifier (reverse-DNS or another
@@ -22,7 +45,7 @@ use crate::Data;
 /// [`Decode`] is order-agnostic, so the derived transparent decoder is kept.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Decode)]
 #[cbor(transparent)]
-pub struct Extensions(#[n(0)] BTreeMap<String, BTreeMap<String, Data>>);
+pub struct Extensions(#[n(0)] BTreeMap<String, BTreeMap<String, ExtensionValue>>);
 
 /// Emits a string-keyed map as a definite-length CBOR map whose keys are in
 /// RFC 8949 §4.2 bytewise order: for definite-length text strings that is
@@ -75,21 +98,26 @@ impl Extensions {
     }
 
     /// Adds an extension value under the given vendor identifier and key.
-    pub fn add(&mut self, vendor: impl Into<String>, key: impl Into<String>, value: Data) {
+    pub fn add(
+        &mut self,
+        vendor: impl Into<String>,
+        key: impl Into<String>,
+        value: impl Into<ExtensionValue>,
+    ) {
         self.0
             .entry(vendor.into())
             .or_default()
-            .insert(key.into(), value);
+            .insert(key.into(), value.into());
     }
 
     /// Returns the extension value stored under the given vendor identifier
     /// and key, if present.
-    pub fn get(&self, vendor: &str, key: &str) -> Option<&Data> {
+    pub fn get(&self, vendor: &str, key: &str) -> Option<&ExtensionValue> {
         self.0.get(vendor).and_then(|entries| entries.get(key))
     }
 
     /// Iterates over all extension entries as `(vendor, key, value)` triples.
-    pub fn iter(&self) -> impl Iterator<Item = (&str, &str, &Data)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &str, &ExtensionValue)> {
         self.0.iter().flat_map(|(vendor, entries)| {
             entries
                 .iter()
