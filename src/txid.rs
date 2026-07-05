@@ -5,38 +5,7 @@ use std::{
     io::{self, Read, Write},
 };
 
-/// A transaction identifier (TxId) represented as a 32-byte hash.
-///
-/// `TxId` is a specialized wrapper around a 32-byte array representing a transaction's
-/// unique identifier in the Zcash blockchain. Transaction IDs are double-SHA256 hashes
-/// of the transaction data (with specific rules for what parts are included in the hash).
-///
-/// # Zcash Concept Relation
-/// In Zcash (and Bitcoin-derived cryptocurrencies), transaction IDs are critical identifiers
-/// used to reference transactions throughout the protocol:
-/// - In transaction inputs to reference previous outputs being spent
-/// - In block data structures to identify included transactions
-/// - In client APIs and explorers to look up transaction details
-///
-/// Transaction IDs are displayed in reverse byte order by convention (to match
-/// Bitcoin's historical display format), while stored internally in little-endian order.
-///
-/// # Data Preservation
-/// The `TxId` type preserves the exact 32-byte transaction identifier as found in wallet
-/// data files, ensuring that transaction references maintain their cryptographic integrity
-/// during wallet migrations.
-///
-/// # Examples
-/// ```
-/// # use zewif::TxId;
-/// // Create a TxId from a byte array
-/// let tx_bytes = [0u8; 32];
-/// let txid = TxId::from_bytes(tx_bytes);
-///
-/// // Display the TxId in the conventional reversed format used by explorers
-/// // Note: this would display as a string of 64 hex characters (zeros in this example)
-/// println!("Transaction ID: {}", txid);
-/// ```
+/// A 32-byte transaction identifier, displayed in reverse byte order by convention.
 #[derive(Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Hash)]
 pub struct TxId([u8; 32]);
 

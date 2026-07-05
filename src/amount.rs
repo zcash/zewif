@@ -1,69 +1,29 @@
 use std::{
     iter::Sum,
-    ops::{Add, Mul, Neg, Sub},
+    ops::{Add, Mul, Sub},
 };
 
 use crate::error::{Error, Result};
 use bc_envelope::prelude::*;
 
-use crate::format_signed_zats_as_zec;
+use crate::format_zats_as_zec;
 
 /// Number of zatoshis (zats) in 1 ZEC
 pub const COIN: u64 = 1_0000_0000;
 /// Maximum possible ZEC supply in zatoshis (21 million ZEC)
 pub const MAX_MONEY: u64 = 21_000_000 * COIN;
-/// Maximum balance as a signed value
+/// Maximum balance in zatoshis, as a signed value for range-checking i64
+/// inputs
 pub const MAX_BALANCE: i64 = MAX_MONEY as i64;
 
-/// A type-safe representation of a ZCash amount in zatoshis (zats).
-///
-/// `Amount` represents a monetary value in the Zcash cryptocurrency, stored
-/// internally as a signed 64-bit integer count of zatoshis. One ZEC equals
-/// 100,000,000 zatoshis (1 ZEC = 10^8 zats), similar to Bitcoin's satoshis.
-///
-/// The signed representation allows for representing both positive amounts
-/// (payments received) and negative amounts (payments sent) in transaction
-/// and balance calculations.
-///
-/// # Zcash Concept Relation
-/// In Zcash, monetary values are represented in two units:
-/// - ZEC: The main unit of currency (analogous to dollars)
-/// - zatoshis (zats): The smallest indivisible unit (analogous to cents)
-///
-/// Amount enforces the protocol limit of 21 million total ZEC, preventing
-/// overflow or underflow in calculations with proper error handling.
-///
-/// # Data Preservation
-/// The `Amount` type preserves the exact zatoshi values from wallet data,
-/// maintaining precise balances and transaction amounts during wallet migration.
-/// When displayed, values are formatted as ZEC with decimal places.
-///
-/// # Examples
-/// ```
-/// # use zewif::Amount;
-/// # use zewif::Result;
-/// #
-/// # fn example() -> Result<()> {
-/// // Create an amount of 1.5 ZEC (150,000,000 zatoshis)
-/// let amount = Amount::from_u64(150_000_000)?;
-///
-/// // Check if the amount is positive
-/// assert!(amount.is_positive());
-///
-/// // Convert to raw zatoshi value
-/// let zats: i64 = amount.into();
-/// assert_eq!(zats, 150_000_000);
-/// # Ok(())
-/// # }
-/// ```
-/// FIXME: Amounts in the zewif format should never be negative; negative values are only used
-/// transiently in the protocol.
+/// A non-negative ZEC amount in zatoshis (1 ZEC = 10^8 zats), in the range
+/// `[0, MAX_MONEY]`.
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
 pub struct Amount(i64);
 
 impl std::fmt::Debug for Amount {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Amount({})", format_signed_zats_as_zec(self.0))
+        write!(f, "Amount({})", format_zats_as_zec(self.0 as u64))
     }
 }
 
@@ -75,15 +35,15 @@ impl Amount {
 
     /// Creates a constant Amount from an i64.
     ///
-    /// Panics: if the amount is outside the range `{-MAX_BALANCE..MAX_BALANCE}`.
+    /// Panics: if the amount is outside the range `{0..MAX_BALANCE}`.
     pub const fn const_from_i64(amount: i64) -> Self {
-        assert!(-MAX_BALANCE <= amount && amount <= MAX_BALANCE); // contains is not const
+        assert!(0 <= amount && amount <= MAX_BALANCE); // contains is not const
         Amount(amount)
     }
 
     /// Creates a constant Amount from a u64.
     ///
-    /// Panics: if the amount is outside the range `{0..MAX_BALANCE}`.
+    /// Panics: if the amount is outside the range `{0..MAX_MONEY}`.
     pub const fn const_from_u64(amount: u64) -> Self {
         assert!(amount <= MAX_MONEY); // contains is not const
         Amount(amount as i64)
@@ -91,25 +51,12 @@ impl Amount {
 
     /// Creates an Amount from an i64.
     ///
-    /// Returns an error if the amount is outside the range `{-MAX_BALANCE..MAX_BALANCE}`.
-    pub fn from_i64(amount: i64) -> Result<Self> {
-        if (-MAX_BALANCE..=MAX_BALANCE).contains(&amount) {
-            Ok(Amount(amount))
-        } else if amount < -MAX_BALANCE {
-            Err(Error::AmountUnderflow(amount as u64))
-        } else {
-            Err(Error::AmountOverflow(amount as u64))
-        }
-    }
-
-    /// Creates a non-negative Amount from an i64.
-    ///
     /// Returns an error if the amount is outside the range `{0..MAX_BALANCE}`.
-    pub fn from_nonnegative_i64(amount: i64) -> Result<Self> {
+    pub fn from_i64(amount: i64) -> Result<Self> {
         if (0..=MAX_BALANCE).contains(&amount) {
             Ok(Amount(amount))
         } else if amount < 0 {
-            Err(Error::AmountUnderflow(amount as u64))
+            Err(Error::AmountUnderflow(amount.unsigned_abs()))
         } else {
             Err(Error::AmountOverflow(amount as u64))
         }
@@ -128,18 +75,10 @@ impl Amount {
 
     /// Reads an Amount from a signed 64-bit little-endian integer.
     ///
-    /// Returns an error if the amount is outside the range `{-MAX_BALANCE..MAX_BALANCE}`.
+    /// Returns an error if the amount is outside the range `{0..MAX_BALANCE}`.
     pub fn from_i64_le_bytes(bytes: [u8; 8]) -> Result<Self> {
         let amount = i64::from_le_bytes(bytes);
         Amount::from_i64(amount)
-    }
-
-    /// Reads a non-negative Amount from a signed 64-bit little-endian integer.
-    ///
-    /// Returns an error if the amount is outside the range `{0..MAX_BALANCE}`.
-    pub fn from_nonnegative_i64_le_bytes(bytes: [u8; 8]) -> Result<Self> {
-        let amount = i64::from_le_bytes(bytes);
-        Amount::from_nonnegative_i64(amount)
     }
 
     /// Reads an Amount from an unsigned 64-bit little-endian integer.
@@ -155,16 +94,9 @@ impl Amount {
         self.0.to_le_bytes()
     }
 
-    /// Returns `true` if `self` is positive and `false` if the Amount is zero or
-    /// negative.
+    /// Returns `true` if `self` is positive.
     pub const fn is_positive(self) -> bool {
         self.0.is_positive()
-    }
-
-    /// Returns `true` if `self` is negative and `false` if the Amount is zero or
-    /// positive.
-    pub const fn is_negative(self) -> bool {
-        self.0.is_negative()
     }
 
     /// Sums a collection of Amount values with overflow checking.
@@ -242,7 +174,7 @@ impl TryFrom<Amount> for u64 {
     }
 }
 
-/// Adds two Amounts, checking for overflow/underflow
+/// Adds two Amounts, checking for overflow
 impl Add<Amount> for Amount {
     type Output = Option<Amount>;
 
@@ -260,7 +192,7 @@ impl Add<Amount> for Option<Amount> {
     }
 }
 
-/// Subtracts one Amount from another, checking for overflow/underflow
+/// Subtracts one Amount from another, returning None on underflow
 impl Sub<Amount> for Amount {
     type Output = Option<Amount>;
 
@@ -292,16 +224,7 @@ impl<'a> Sum<&'a Amount> for Option<Amount> {
     }
 }
 
-/// Negates an Amount, flipping its sign
-impl Neg for Amount {
-    type Output = Self;
-
-    fn neg(self) -> Self {
-        Amount(-self.0)
-    }
-}
-
-/// Multiplies an Amount by a usize factor, checking for overflow/underflow
+/// Multiplies an Amount by a usize factor, checking for overflow
 impl Mul<usize> for Amount {
     type Output = Option<Amount>;
 
@@ -357,12 +280,24 @@ mod tests {
     impl crate::RandomInstance for Amount {
         fn random() -> Self {
             let mut rng = bc_rand::thread_rng();
-            let value =
-                rand::Rng::random_range(&mut rng, -MAX_BALANCE..=MAX_BALANCE);
+            let value = rand::Rng::random_range(&mut rng, 0..=MAX_BALANCE);
             Self(value)
         }
     }
 
     test_cbor_roundtrip!(Amount);
     test_envelope_roundtrip!(Amount);
+
+    #[test]
+    fn from_i64_rejects_negative() {
+        assert!(Amount::from_i64(-1).is_err());
+    }
+
+    #[test]
+    fn sub_underflow_returns_none() {
+        let one = Amount::from_u64(1).unwrap();
+        let two = Amount::from_u64(2).unwrap();
+        assert_eq!(one - two, None);
+        assert_eq!(Amount::zero() - one, None);
+    }
 }

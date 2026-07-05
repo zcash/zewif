@@ -2,75 +2,34 @@ use bc_components::ARID;
 use bc_envelope::prelude::*;
 use std::collections::HashMap;
 
-use crate::{BlockHeight, Indexed, envelope_indexed_objects_for_predicate};
+use crate::{envelope_indexed_objects_for_predicate, BlockHash, BlockHeight, Indexed};
 
 use super::{Transaction, TxId, ZewifWallet};
 
-/// The top-level container for the Zcash Wallet Interchange Format (ZeWIF).
+/// Top-level ZeWIF container: wallets, global transaction history, and export metadata.
 ///
-/// `Zewif` is the root structure of the ZeWIF hierarchy, serving as a container
-/// for multiple wallets and a global transaction history. This structure represents
-/// the entirety of the data that would be migrated between different Zcash wallet
-/// implementations.
-///
-/// # Zcash Concept Relation
-///
-/// In the Zcash wallet ecosystem:
-///
-/// - **Interchange Container**: `Zewif` serves as the standardized format for
-///   moving wallet data between different implementations
-/// - **Multi-Wallet Support**: A single interchange file can contain multiple wallets,
-///   each with its own accounts and configuration
-/// - **Global Transaction History**: Transactions are stored at the top level and
-///   referenced by accounts in wallets, avoiding duplication
-/// - **Migration Target**: This structure is the complete package that can be
-///   serialized/deserialized during wallet migration
-///
-/// # Data Preservation
-///
-/// During wallet migration, the ZeWIF top-level container preserves:
-///
-/// - **Complete Wallet Collection**: All wallets with their unique identities and configurations
-/// - **Full Transaction Graph**: The complete transaction history across all wallets
-/// - **Relationship Structure**: The connections between wallets, accounts, and transactions
-/// - **Vendor-Specific Extensions**: Custom metadata through the attachments system
-///
-/// # Examples
-/// ```no_run
-/// # use zewif::{Zewif, ZewifWallet, Network, Transaction, TxId, BlockHeight};
-/// // Create the top-level container
-/// let mut zewif = Zewif::new(BlockHeight::from_u32(2000000));
-///
-/// // Add a wallet
-/// let wallet = ZewifWallet::new(Network::Main);
-/// zewif.add_wallet(wallet);
-///
-/// // Add a transaction to the global history
-/// let txid = TxId::from_bytes([0u8; 32]); // In practice, a real transaction ID
-/// let tx = Transaction::new(txid);
-/// zewif.add_transaction(txid, tx);
-///
-/// // Access transactions
-/// let tx_count = zewif.transactions().len();
-/// ```
+/// Transactions are stored at the top level and referenced by account via `TxId`,
+/// avoiding duplication across accounts and wallets.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Zewif {
     id: ARID,
     wallets: Vec<ZewifWallet>,
     transactions: HashMap<TxId, Transaction>,
     export_height: BlockHeight,
+    export_height_block_hash: BlockHash,
     attachments: Attachments,
 }
 
 bc_envelope::impl_attachable!(Zewif);
 
 impl Zewif {
-    pub fn new(export_height: BlockHeight) -> Self {
+    pub fn new(export_height: BlockHeight, export_height_block_hash: BlockHash) -> Self {
         Self {
             id: ARID::new(),
             wallets: Vec::new(),
             transactions: HashMap::new(),
             export_height,
+            export_height_block_hash,
             attachments: Attachments::new(),
         }
     }
@@ -111,6 +70,10 @@ impl Zewif {
     pub fn export_height(&self) -> BlockHeight {
         self.export_height
     }
+
+    pub fn export_height_block_hash(&self) -> BlockHash {
+        self.export_height_block_hash
+    }
 }
 
 #[rustfmt::skip]
@@ -121,6 +84,7 @@ impl From<Zewif> for Envelope {
         e = value.wallets.iter().fold(e, |e, wallet| e.add_assertion("wallet", wallet.clone()));
         e = value.transactions.iter().fold(e, |e, (_, transaction)| e.add_assertion("transaction", transaction.clone()));
         e = e.add_assertion("export_height", value.export_height);
+        e = e.add_assertion("export_height_block_hash", value.export_height_block_hash);
         value.attachments.add_to_envelope(e)
     }
 }
@@ -141,6 +105,7 @@ impl TryFrom<Envelope> for Zewif {
             .into_iter().map(|tx| (tx.txid(), tx)).collect();
 
         let export_height = envelope.extract_object_for_predicate("export_height")?;
+        let export_height_block_hash = envelope.extract_object_for_predicate("export_height_block_hash")?;
         let attachments = Attachments::try_from_envelope(&envelope)
             .map_err(|e| bc_envelope::Error::General(format!("attachments: {}", e)))?;
 
@@ -149,6 +114,7 @@ impl TryFrom<Envelope> for Zewif {
             wallets,
             transactions,
             export_height,
+            export_height_block_hash,
             attachments,
         })
     }
@@ -159,7 +125,7 @@ mod tests {
     use bc_components::ARID;
     use bc_envelope::Attachments;
 
-    use crate::{BlockHeight, Transaction, test_envelope_roundtrip};
+    use crate::{BlockHash, BlockHeight, Transaction, test_envelope_roundtrip};
 
     use super::Zewif;
 
@@ -175,6 +141,7 @@ mod tests {
                     .map(|tx| (tx.txid(), tx.clone()))
                     .collect(),
                 export_height: BlockHeight::random(),
+                export_height_block_hash: BlockHash::random(),
                 attachments: Attachments::random(),
             }
         }

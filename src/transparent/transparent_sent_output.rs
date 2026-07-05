@@ -1,31 +1,27 @@
 use bc_envelope::prelude::*;
 
-use crate::{Amount, Indexed, Memo};
+use crate::{Amount, Indexed};
 
-/// Sender-side metadata for a Sapling output not recoverable from the chain.
+/// Sender-side metadata for a transparent output not recoverable from the chain
+/// without full transaction data.
 ///
-/// Preserves the recipient address, value, and memo so the sending wallet
-/// can reconstruct payment history and generate proofs of payment.
+/// Preserves the recipient address and value so the sending wallet can
+/// reconstruct payment history.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SaplingSentOutput {
+pub struct TransparentSentOutput {
     index: usize,
 
-    /// Index of the output within the transaction's Sapling output list
-    /// (maps to zcash_client_sqlite sent_notes.output_index).
+    /// Index of the output within the transaction's transparent output
+    /// (vout) list (maps to zcash_client_sqlite sent_notes.output_index).
     output_index: u32,
 
-    /// The recipient address string (a Sapling address or a unified address
-    /// with a Sapling receiver). Preserved verbatim because unified address
-    /// encoding includes receivers that can't be reconstructed from the
-    /// Sapling component alone.
+    /// The recipient transparent address string.
     recipient_address: String,
 
     value: Amount,
-
-    memo: Option<Memo>,
 }
 
-impl Indexed for SaplingSentOutput {
+impl Indexed for TransparentSentOutput {
     fn index(&self) -> usize {
         self.index
     }
@@ -35,30 +31,18 @@ impl Indexed for SaplingSentOutput {
     }
 }
 
-impl SaplingSentOutput {
-    pub fn new() -> Self {
-        Self {
-            index: 0,
-            output_index: 0,
-            recipient_address: "".to_string(),
-            value: Amount::zero(),
-            memo: None,
-        }
-    }
-
+impl TransparentSentOutput {
     pub fn from_parts(
         index: usize,
         output_index: u32,
         recipient_address: String,
         value: Amount,
-        memo: Option<Memo>,
     ) -> Self {
         Self {
             index,
             output_index,
             recipient_address,
             value,
-            memo,
         }
     }
 
@@ -85,70 +69,53 @@ impl SaplingSentOutput {
     pub fn set_value(&mut self, value: Amount) {
         self.value = value;
     }
-
-    pub fn memo(&self) -> Option<&Memo> {
-        self.memo.as_ref()
-    }
-
-    pub fn set_memo(&mut self, memo: Option<Memo>) {
-        self.memo = memo;
-    }
 }
 
-impl Default for SaplingSentOutput {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl From<SaplingSentOutput> for Envelope {
-    fn from(value: SaplingSentOutput) -> Self {
+impl From<TransparentSentOutput> for Envelope {
+    fn from(value: TransparentSentOutput) -> Self {
         Envelope::new(value.index)
-            .add_type("SaplingSentOutput")
+            .add_type("TransparentSentOutput")
             .add_assertion("output_index", value.output_index)
             .add_assertion("recipient_address", value.recipient_address)
             .add_assertion("value", value.value)
-            .add_optional_assertion("memo", value.memo)
     }
 }
 
-impl TryFrom<Envelope> for SaplingSentOutput {
+impl TryFrom<Envelope> for TransparentSentOutput {
     type Error = bc_envelope::Error;
 
     fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.check_type("SaplingSentOutput")?;
+        envelope.check_type("TransparentSentOutput")?;
         let index = envelope.extract_subject()?;
         let output_index = envelope.extract_object_for_predicate("output_index")?;
         let recipient_address = envelope.extract_object_for_predicate("recipient_address")?;
         let value = envelope.extract_object_for_predicate("value")?;
-        let memo = envelope.extract_optional_object_for_predicate("memo")?;
 
-        Ok(SaplingSentOutput {
+        Ok(TransparentSentOutput {
             index,
             output_index,
             recipient_address,
             value,
-            memo,
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::SaplingSentOutput;
-    use crate::{Amount, Memo, test_envelope_roundtrip};
+    use crate::{Amount, test_envelope_roundtrip};
 
-    impl crate::RandomInstance for SaplingSentOutput {
+    use super::TransparentSentOutput;
+
+    impl crate::RandomInstance for TransparentSentOutput {
         fn random() -> Self {
             Self {
                 index: 0,
                 output_index: u32::random() % 100,
                 recipient_address: String::random(),
                 value: Amount::random(),
-                memo: Some(Memo::random()),
             }
         }
     }
 
-    test_envelope_roundtrip!(SaplingSentOutput);
+    test_envelope_roundtrip!(TransparentSentOutput);
 }

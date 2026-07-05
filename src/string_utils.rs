@@ -57,10 +57,10 @@ pub fn format_with_underscores(amount: impl Into<u64>) -> String {
 /// #
 /// // 1 ZEC = 100_000_000 zatoshi
 /// assert_eq!(format_zats_as_zec(100_000_000_u64), "ZEC 1.0");
-/// 
+///
 /// // Format partial ZEC amounts
 /// assert_eq!(format_zats_as_zec(123_456_789_u64), "ZEC 1.23456789");
-/// 
+///
 /// // Trailing zeros are trimmed
 /// assert_eq!(format_zats_as_zec(100_000_000_000_u64), "ZEC 1000.0");
 /// ```
@@ -75,35 +75,4 @@ pub fn format_zats_as_zec(amount: impl Into<u64>) -> String {
     let fraction_str = format!("{:08}", fraction);
     let trimmed_fraction = fraction_str.trim_end_matches('0');
     format!("ZEC {}.{}", integer, trimmed_fraction)
-}
-
-/// Formats a signed zatoshi amount as a human-readable ZEC value with appropriate sign.
-///
-/// This function extends `format_zats_as_zec` to handle negative values, which can occur
-/// in certain contexts like transaction fee calculations or balance changes.
-///
-/// # Arguments
-/// * `amount` - A signed zatoshi amount that can be converted to i64
-///
-/// # Returns
-/// A string with the formatted ZEC amount, including sign if negative
-///
-/// # Examples
-/// ```
-/// # use zewif::format_signed_zats_as_zec;
-/// #
-/// // Positive values work the same as format_zats_as_zec
-/// assert_eq!(format_signed_zats_as_zec(100_000_000), "ZEC 1.0");
-/// 
-/// // Negative values include a minus sign
-/// assert_eq!(format_signed_zats_as_zec(-50_000_000), "-ZEC 0.5");
-/// assert_eq!(format_signed_zats_as_zec(-1), "-ZEC 0.00000001");
-/// ```
-pub fn format_signed_zats_as_zec(amount: impl Into<i64>) -> String {
-    let amount = amount.into();
-    if amount < 0 {
-        format!("-{}", format_zats_as_zec(-amount as u64))
-    } else {
-        format_zats_as_zec(amount as u64)
-    }
 }
