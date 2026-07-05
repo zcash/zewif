@@ -240,4 +240,23 @@ mod tests {
         assert_eq!(tx.mined_height(), None);
         assert!(!tx.is_trusted());
     }
+
+    /// The `extensions` field codec tolerates an explicit `null` in its map
+    /// position, decoding it as an empty extension set (the reader tolerance
+    /// mandated for absent optional fields). An explicit `false` in the
+    /// `trusted` position likewise decodes as untrusted.
+    #[test]
+    fn explicit_null_extensions_and_false_trusted_decode_as_default() {
+        let mut buf = Vec::new();
+        let mut e = minicbor::Encoder::new(&mut buf);
+        e.map(3).unwrap();
+        e.u32(0).unwrap().bytes(&[7u8; 32]).unwrap();
+        // trusted: an explicit `false` (exercises the non-null branch).
+        e.u32(8).unwrap().bool(false).unwrap();
+        // extensions: an explicit `null` (exercises the null-tolerance branch).
+        e.u32(9).unwrap().null().unwrap();
+        let tx: Transaction = minicbor::decode(&buf).unwrap();
+        assert!(!tx.is_trusted());
+        assert!(tx.extensions().is_empty());
+    }
 }
