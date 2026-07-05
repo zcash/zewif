@@ -68,9 +68,10 @@ account-viewing-key = [0, [ufvk]]              ; ZIP 316 UFVK
                     / [3, []]                  ; transparent address set
                                                ; (legacy zcashd)
 
-ufvk           = { 0: tstr }    ; canonical ZIP 316 encoding
-sapling-extfvk = { 0: bstr }    ; canonical extended FVK encoding
-sprout-vk      = { 0: bstr }    ; opaque canonical encoding
+ufvk           = tstr           ; canonical ZIP 316 encoding
+sapling-extfvk = bytes169       ; canonical ZIP 32 extended FVK encoding
+sprout-vk      = bytes67        ; canonical encoding: 3-byte version prefix
+                                ; followed by a_pk and sk_enc
 
 key-source = [0, [key-source-derived]]
            / [1, []]            ; imported
@@ -137,9 +138,8 @@ protocol-address = [0, [transparent-address]]
 transparent-address = {
   0: tstr,                      ; canonical address string
   ? 1: transparent-spend-authority,
-  ? 2: bstr,                    ; pubkey (33 or 65 bytes): watch-only
-                                ; imported P2PK/P2PKH; omitted when spend
-                                ; authority is present
+  ? 2: transparent-pubkey,      ; pubkey: watch-only imported P2PK/P2PKH;
+                                ; omitted when spend authority is present
   ? 3: bstr,                    ; redeem-script: watch-only imported P2SH
 }
 
@@ -315,37 +315,45 @@ seed-entry = {
 seed-material = [0, [bip39-mnemonic]]
               / [1, [legacy-seed]]
 
+legacy-seed = bytes32           ; raw pre-mnemonic HD seed bytes
+
 bip39-mnemonic = {
   0: tstr,                      ; the mnemonic phrase
   ? 1: tstr,                    ; language, BCP 47 tag (e.g. "en")
 }
 
-legacy-seed = { 0: bstr }       ; raw pre-mnemonic HD seed bytes
-
 transparent-key-entry = {
-  0: bstr,                      ; secp256k1 public key (33 or 65 bytes)
+  0: transparent-pubkey,        ; secp256k1 public key
   1: bytes32,                   ; private key
 }
 
 sapling-key-entry = {
-  0: bstr,                      ; the canonical encoding of the extended full
+  0: bytes169,                  ; the canonical encoding of the extended full
                                 ; viewing key this spending key corresponds to
-  1: bstr,                      ; canonical extended spending key encoding
+  1: bytes169,                  ; canonical extended spending key encoding
 }
 
 sprout-key-entry = {
   0: tstr,                      ; Sprout address
-  1: bstr,                      ; Sprout spending key, canonical encoding
+  1: bytes34,                   ; Sprout spending key, canonical encoding:
+                                ; 2-byte network version prefix followed by
+                                ; a_sk
 }
 
 ; Vendor-namespaced extension data. Vendor identifiers SHOULD be reverse-DNS
-; or another collision-resistant convention. Each value byte string contains
-; a single embedded CBOR data item (the semantics of RFC 8949 tag 24).
-; Re-exporting software MUST preserve extension entries it does not
-; understand.
-extensions = {* tstr => {* tstr => bstr}}
+; or another collision-resistant convention. Re-exporting software MUST
+; preserve extension entries it does not understand.
+extensions = {* tstr => {* tstr => extension-value}}
+
+; A single embedded CBOR data item (the semantics of RFC 8949 tag 24).
+extension-value = bstr
+
+transparent-pubkey = bstr .size 33 / bstr .size 65
 
 height  = uint .lt 4294967296
-txid    = bytes32
-bytes32 = bstr .size 32
-bytes11 = bstr .size 11
+txid     = bytes32
+bytes32  = bstr .size 32
+bytes34  = bstr .size 34
+bytes67  = bstr .size 67
+bytes169 = bstr .size 169
+bytes11  = bstr .size 11
