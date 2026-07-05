@@ -38,7 +38,18 @@ impl Zewif {
         }
         let version = u32::from_le_bytes(bytes[MAGIC_BYTES.len()..HEADER_LEN].try_into()?);
         match version {
-            ZEWIF_VERSION_1 => Ok(minicbor::decode(&bytes[HEADER_LEN..])?),
+            ZEWIF_VERSION_1 => {
+                // The payload must be a single CBOR data item: decode one
+                // item and reject any bytes left over after it.
+                let payload = &bytes[HEADER_LEN..];
+                let mut decoder = minicbor::Decoder::new(payload);
+                let zewif = decoder.decode()?;
+                let remaining = payload.len() - decoder.position();
+                if remaining > 0 {
+                    return Err(Error::TrailingData(remaining));
+                }
+                Ok(zewif)
+            }
             unsupported => Err(Error::UnsupportedVersion(unsupported)),
         }
     }
@@ -105,6 +116,20 @@ mod tests {
                 Err(Error::TruncatedHeader(n)) if n == len
             ));
         }
+    }
+
+    /// The payload must be a single CBOR data item: a valid document with
+    /// extra bytes appended after the payload is rejected as trailing data,
+    /// reporting the number of unconsumed bytes.
+    #[test]
+    fn trailing_data_after_payload_is_rejected() {
+        let mut bytes = sample().to_bytes().unwrap();
+        let junk = [0xDE, 0xAD, 0xBE, 0xEF];
+        bytes.extend_from_slice(&junk);
+        assert!(matches!(
+            Zewif::from_bytes(&bytes),
+            Err(Error::TrailingData(n)) if n == junk.len()
+        ));
     }
 
     /// A well-framed document whose payload is not a valid `zewif` CBOR

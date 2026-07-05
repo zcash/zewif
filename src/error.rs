@@ -37,6 +37,12 @@ pub enum Error {
     #[error("Unsupported ZeWIF container version: {0}")]
     UnsupportedVersion(u32),
 
+    /// The payload is a well-formed CBOR item followed by additional bytes;
+    /// the payload must be a single CBOR data item. Carries the number of
+    /// unconsumed trailing bytes.
+    #[error("Trailing data after ZeWIF payload: {0} bytes")]
+    TrailingData(usize),
+
     /// The CBOR payload could not be decoded.
     #[error("CBOR decode error: {0}")]
     CborDecode(#[from] minicbor::decode::Error),
