@@ -9,6 +9,7 @@ blob!(
     32,
     "A node in the Sapling note commitment tree."
 );
+crate::blob_hex!(MerkleHashSapling, forward);
 impl Copy for MerkleHashSapling {}
 
 /// An incremental witness for a Sapling note commitment, proving its

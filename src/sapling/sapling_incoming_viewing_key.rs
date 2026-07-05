@@ -7,6 +7,7 @@ blob!(
     32,
     "A 32-byte Sapling Incoming Viewing Key, enabling detection of incoming notes."
 );
+crate::blob_hex!(SaplingIncomingViewingKey, forward);
 
 impl Copy for SaplingIncomingViewingKey {}
 
