@@ -386,25 +386,35 @@ fn encrypted_secrets_document_conforms_to_schema() {
     }
 }
 
-/// The full golden fixture document's payload conforms to the schema. This
+/// The payload of a committed golden fixture conforms to the schema. This
 /// ties the byte-exact fixture suite to the schema validator and covers
 /// productions the in-test document does not construct (notably
-/// `incremental-witness`, present in the fixture in both shielded pools).
-#[test]
-fn golden_fixture_payload_conforms_to_schema() {
+/// `incremental-witness`, present in the full fixture in both shielded
+/// pools, and the encrypted-secrets branch in the encrypted fixture).
+fn assert_fixture_payload_conforms(fixture: &str) {
     let schema = load_schema();
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let document = std::fs::read(manifest_dir.join("tests/fixtures/v1/full.zewif"))
+    let document = std::fs::read(manifest_dir.join("tests/fixtures/v1").join(fixture))
         .expect("golden fixture is readable");
     // Strip the container header: 5 magic bytes + 4-byte LE version.
     let payload = &document[zewif::MAGIC_BYTES.len() + 4..];
 
     if let Err(diagnostics) = cddl_cat::validate_cbor_bytes("zewif", &schema, payload) {
         panic!(
-            "the golden fixture payload does not conform to docs/zewif.cddl:\n{}",
-            diagnostics
+            "the {} payload does not conform to docs/zewif.cddl:\n{}",
+            fixture, diagnostics
         );
     }
+}
+
+#[test]
+fn golden_fixture_payload_conforms_to_schema() {
+    assert_fixture_payload_conforms("full.zewif");
+}
+
+#[test]
+fn encrypted_fixture_payload_conforms_to_schema() {
+    assert_fixture_payload_conforms("encrypted.zewif");
 }
 
 /// Guards against a vacuously accepting validator: a document violating the

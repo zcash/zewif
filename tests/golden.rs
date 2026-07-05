@@ -12,8 +12,8 @@ use std::collections::BTreeMap;
 use zewif::{
     Account, AccountPurpose, AccountViewingKey, Address, AddressBookEntry, Amount, Bip39Mnemonic,
     Blob, BlockHash, BlockHeight, ChainState, CommitmentTreeData, CompactTxData, Data,
-    DerivationInfo, DerivedKeySource, Frontier, FrontierData, IncrementalWitness, KeyScope,
-    KeySource, LegacySeed, Memo, MnemonicLanguage, Network, NonHardenedChildIndex,
+    DerivationInfo, DerivedKeySource, EncryptedStore, Frontier, FrontierData, IncrementalWitness,
+    KeyScope, KeySource, LegacySeed, Memo, MnemonicLanguage, Network, NonHardenedChildIndex,
     OrchardOutputData, ProtocolAddress, RawTxData, ReceivedOutput, ReceivedOutputPool,
     RegtestParams, SaplingExtFvk, SaplingKeyEntry, SaplingOutputData, ScanRange, Script,
     SecretStore, Secrets, SeedEntry, SeedFingerprint, SeedMaterial, SentOutput, SproutKeyEntry,
@@ -24,6 +24,7 @@ use zewif::{
 
 const MINIMAL_GOLDEN: &[u8] = include_bytes!("fixtures/v1/minimal.zewif");
 const FULL_GOLDEN: &[u8] = include_bytes!("fixtures/v1/full.zewif");
+const ENCRYPTED_GOLDEN: &[u8] = include_bytes!("fixtures/v1/encrypted.zewif");
 
 /// The transaction carrying every optional field.
 const TXID_FULL: [u8; 32] = [0xA1; 32];
@@ -304,6 +305,18 @@ fn transparent_account() -> Account {
     address.set_scope(KeyScope::Foreign);
     account.add_address(address);
 
+    // A ZIP 320 single-use ephemeral transparent address (TEX destination).
+    let mut ephemeral = transparent::Address::new("t1fixtureEphemeralAddr00000000000");
+    ephemeral.set_spend_authority(transparent::TransparentSpendAuthority::Derived(
+        DerivationInfo::new(
+            NonHardenedChildIndex::from(2u32),
+            NonHardenedChildIndex::from(0u32),
+        ),
+    ));
+    let mut address = Address::new(ProtocolAddress::Transparent(ephemeral));
+    address.set_scope(KeyScope::Ephemeral);
+    account.add_address(address);
+
     // A transparent UTXO with the enrichment fields present...
     let mut enriched = ReceivedOutput::new(
         0,
@@ -358,6 +371,34 @@ fn full_wallet() -> ZewifWallet {
         "theme",
         Data::from_hex("656461726b").unwrap(),
     );
+    wallet
+}
+
+/// A minimal mainnet wallet, present to exercise the `network = [0, []]`
+/// (mainnet) union variant. Account and address-book coverage lives in the
+/// regtest wallet; this wallet carries a single view-only account so the
+/// mainnet tag appears in a non-degenerate wallet.
+fn mainnet_wallet() -> ZewifWallet {
+    let mut wallet = ZewifWallet::new(Network::Mainnet);
+    let mut account = Account::new(AccountViewingKey::Ufvk(UnifiedFullViewingKey::new(
+        "uview1fixture0mainnet0viewing0key000000000",
+    )));
+    account.set_name("Mainnet watch-only");
+    account.set_purpose(AccountPurpose::ViewOnly);
+    wallet.add_account(account);
+    wallet
+}
+
+/// A minimal testnet wallet, present to exercise the `network = [1, []]`
+/// (testnet) union variant.
+fn testnet_wallet() -> ZewifWallet {
+    let mut wallet = ZewifWallet::new(Network::Testnet);
+    let mut account = Account::new(AccountViewingKey::Ufvk(UnifiedFullViewingKey::new(
+        "utestview1fixture0testnet0viewing0key00000",
+    )));
+    account.set_name("Testnet watch-only");
+    account.set_purpose(AccountPurpose::ViewOnly);
+    wallet.add_account(account);
     wallet
 }
 
@@ -438,13 +479,18 @@ fn secret_store() -> SecretStore {
 }
 
 /// A comprehensive document exercising every record type and union variant
-/// of the version-1 schema.
+/// of the version-1 schema, except the encrypted-secrets branch of `secrets`
+/// (covered by [`encrypted_fixture`]). All three `network` variants appear:
+/// the regtest wallet with its activation schedule, plus mainnet and testnet
+/// wallets.
 fn full_fixture() -> Zewif {
     let mut zewif = Zewif::new(
         BlockHeight::from_u32(2_500_000),
         BlockHash::from_bytes([0xEC; 32]),
     );
     zewif.add_wallet(full_wallet());
+    zewif.add_wallet(mainnet_wallet());
+    zewif.add_wallet(testnet_wallet());
     for tx in [
         full_transaction(),
         bare_transaction(),
@@ -461,6 +507,21 @@ fn full_fixture() -> Zewif {
         "version",
         Data::from_hex("65312e322e33").unwrap(),
     );
+    zewif
+}
+
+/// A viewing-only export whose secret store is age-encrypted: the only
+/// fixture exercising the `secrets = [1, [encrypted-store]]` branch. The
+/// ciphertext is a fixed, non-secret placeholder — not a real age message —
+/// since the fixtures carry no live key material.
+fn encrypted_fixture() -> Zewif {
+    let mut zewif = Zewif::new(
+        BlockHeight::from_u32(2_500_000),
+        BlockHash::from_bytes([0xED; 32]),
+    );
+    zewif.set_secrets(Secrets::Encrypted(EncryptedStore::new(Data::from_slice(
+        b"age-encryption.org/v1 fixture ciphertext (not a real age message)",
+    ))));
     zewif
 }
 
@@ -487,6 +548,19 @@ fn full_from_bytes_matches_fixture() {
     assert_eq!(Zewif::from_bytes(FULL_GOLDEN).unwrap(), full_fixture());
 }
 
+#[test]
+fn encrypted_to_bytes_matches_golden() {
+    assert_eq!(encrypted_fixture().to_bytes().unwrap(), ENCRYPTED_GOLDEN);
+}
+
+#[test]
+fn encrypted_from_bytes_matches_fixture() {
+    assert_eq!(
+        Zewif::from_bytes(ENCRYPTED_GOLDEN).unwrap(),
+        encrypted_fixture()
+    );
+}
+
 /// Rewrites the committed fixture files from the constructors in this file:
 /// `cargo test --test golden regenerate_fixtures -- --ignored`.
 ///
@@ -507,4 +581,9 @@ fn regenerate_fixtures() {
     )
     .unwrap();
     std::fs::write(dir.join("full.zewif"), full_fixture().to_bytes().unwrap()).unwrap();
+    std::fs::write(
+        dir.join("encrypted.zewif"),
+        encrypted_fixture().to_bytes().unwrap(),
+    )
+    .unwrap();
 }
