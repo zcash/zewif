@@ -185,7 +185,7 @@ fn ufvk_account(txid1: TxId, txid2: TxId) -> Account {
 /// A view-only account with a standalone Sapling extended full viewing key.
 fn sapling_account() -> Account {
     let mut account = Account::new(AccountViewingKey::SaplingExtFvk(SaplingExtFvk::new(
-        sapling::SaplingExtendedFullViewingKey::new([0x73; 73]),
+        sapling::SaplingExtendedFullViewingKey::new([0x73; 169]),
     )));
     account.set_name("sapling import");
     account.set_key_source(KeySource::Imported);
@@ -290,7 +290,7 @@ fn secret_store() -> SecretStore {
         transparent::TransparentSpendingKey::new([0x77; 32]),
     ));
     store.add_sapling_key(SaplingKeyEntry::new(
-        Data::from_slice(&[0x73; 73]),
+        Data::from_slice(&[0x73; 169]),
         sapling::SaplingExtendedSpendingKey::new([0x69; 169]),
     ));
     store.add_sprout_key(SproutKeyEntry::new(

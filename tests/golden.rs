@@ -198,7 +198,7 @@ fn ufvk_account() -> Account {
 /// without enrichment.
 fn sapling_account() -> Account {
     let mut account = Account::new(AccountViewingKey::SaplingExtFvk(SaplingExtFvk::new(
-        sapling::SaplingExtendedFullViewingKey::new([0x2A; 73]),
+        sapling::SaplingExtendedFullViewingKey::new([0x2A; 169]),
     )));
     account.set_name("Legacy Sapling");
     account.set_key_source(KeySource::Derived(DerivedKeySource::new(
@@ -462,7 +462,7 @@ fn secret_store() -> SecretStore {
         transparent::TransparentSpendingKey::new([0x4B; 32]),
     ));
     store.add_sapling_key(SaplingKeyEntry::new(
-        Data::from_slice(&[0x2A; 73]),
+        Data::from_slice(&[0x2A; 169]),
         sapling::SaplingExtendedSpendingKey::new([0x5B; 169]),
     ));
     store.add_sprout_key(SproutKeyEntry::new(
