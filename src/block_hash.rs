@@ -5,9 +5,9 @@ use crate::blob;
 blob!(
     BlockHash,
     32,
-    "A 32-byte block hash, displayed in reverse byte order by convention.",
-    reversed_hex
+    "A 32-byte block hash, displayed in reverse byte order by convention."
 );
+crate::blob_hex!(BlockHash, reversed);
 impl Copy for BlockHash {}
 
 impl BlockHash {

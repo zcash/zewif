@@ -14,12 +14,10 @@
 /// blob!(ExampleHash, 32, "An example 32-byte hash type");
 /// ```
 ///
-/// A fourth `reversed_hex` argument selects the hash-display convention used
-/// by transaction identifiers and block hashes: `Display`, `Debug`,
-/// `from_hex`, and `to_hex` operate on the byte-reversed (big-endian)
-/// hexadecimal form that RPC methods and block explorers use. Only 32-byte
-/// hash types are canonically encoded in this fashion; the macro rejects
-/// other sizes at compile time.
+/// Hex parsing and display are provided separately by the [`blob_hex!`]
+/// macro, which every `blob!` type pairs with to declare its canonical hex
+/// convention (`forward` byte order, or `reversed` for the hash-display
+/// convention used by transaction identifiers and block hashes).
 ///
 /// # Generated Functionality
 ///
@@ -30,96 +28,14 @@
 #[macro_export]
 macro_rules! blob {
     ($name:ident, $size:expr, $doc:expr) => {
-        $crate::blob!(@common $name, $size, $doc);
-
-        impl std::fmt::Debug for $name {
-            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(f, "{}({})", stringify!($name), hex::encode(self.0))
-            }
-        }
-
-        impl $name {
-            /// Parses an instance from a hex string.
-            pub fn from_hex(hex: &str) -> $crate::Result<Self> {
-                let data = hex::decode(hex)?;
-                let data_len = data.len();
-                Self::from_vec(data).map_err(|_| $crate::Error::HexLengthMismatch {
-                    expected: $size,
-                    actual: data_len,
-                })
-            }
-
-            /// Parses an instance from a hex string in reversed byte order,
-            /// such as is used for transaction identifiers and block
-            /// hashes.
-            pub fn from_reversed_hex(hex: &str) -> $crate::Result<Self> {
-                let mut data = hex::decode(hex)?;
-                let data_len = data.len();
-                data.reverse();
-                Self::from_vec(data).map_err(|_| $crate::Error::HexLengthMismatch {
-                    expected: $size,
-                    actual: data_len,
-                })
-            }
-
-            /// Formats the bytes of this object as a hex string.
-            pub fn to_hex(&self) -> String {
-                hex::encode(self.0)
-            }
-        }
-    };
-
-    ($name:ident, $size:expr, $doc:expr, reversed_hex) => {
-        const _: () = assert!(
-            $size == 32,
-            "the reversed-hex display convention applies only to 32-byte hash types"
-        );
-
-        $crate::blob!(@common $name, $size, $doc);
-
-        impl std::fmt::Debug for $name {
-            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(f, "{}({})", stringify!($name), self)
-            }
-        }
-
-        impl std::fmt::Display for $name {
-            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                // The byte-reversed hex string is what RPC methods and block
-                // explorers display.
-                let mut data = self.0;
-                data.reverse();
-                f.write_str(&hex::encode(data))
-            }
-        }
-
-        impl $name {
-            /// Parses an instance from its canonically-displayed
-            /// (byte-reversed) hexadecimal form.
-            pub fn from_hex(hex: &str) -> $crate::Result<Self> {
-                let mut data = hex::decode(hex)?;
-                let data_len = data.len();
-                data.reverse();
-                Self::from_vec(data).map_err(|_| $crate::Error::HexLengthMismatch {
-                    expected: $size,
-                    actual: data_len,
-                })
-            }
-
-            /// Formats this value in its canonically-displayed
-            /// (byte-reversed) hexadecimal form.
-            pub fn to_hex(&self) -> String {
-                self.to_string()
-            }
-        }
-    };
-
-    (@common $name:ident, $size:expr, $doc:expr) => {
         #[doc = $doc]
         #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct $name([u8; $size]);
 
         impl $name {
+            /// The length of this type's byte content.
+            pub const SIZE: usize = $size;
+
             /// Creates a new instance from a fixed-size byte array.
             ///
             /// This is the primary constructor when you have an exact-sized
@@ -251,6 +167,84 @@ macro_rules! blob {
         impl $crate::RandomInstance for $name {
             fn random() -> Self {
                 Self(rand::random())
+            }
+        }
+    };
+}
+
+/// Declares the canonical hexadecimal convention for a [`blob!`] type,
+/// generating its `Debug` implementation and hex parsing/formatting.
+///
+/// Every `blob!` type pairs with exactly one `blob_hex!` invocation:
+///
+/// - `forward`: `Debug`, `from_hex`, and `to_hex` use the bytes in their
+///   stored order. This is the convention for nullifiers, Merkle hashes,
+///   key material, and fingerprints.
+/// - `reversed`: `Display`, `Debug`, `from_hex`, and `to_hex` use the
+///   byte-reversed (big-endian) form that RPC methods and block explorers
+///   display. Only transaction identifiers and block hashes are canonically
+///   encoded in this fashion.
+#[macro_export]
+macro_rules! blob_hex {
+    ($name:ident, forward) => {
+        impl std::fmt::Debug for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "{}({})", stringify!($name), self.to_hex())
+            }
+        }
+
+        impl $name {
+            /// Parses an instance from a hex string.
+            pub fn from_hex(hex: &str) -> $crate::Result<Self> {
+                let data = hex::decode(hex)?;
+                let data_len = data.len();
+                Self::from_vec(data).map_err(|_| $crate::Error::HexLengthMismatch {
+                    expected: Self::SIZE,
+                    actual: data_len,
+                })
+            }
+
+            /// Formats the bytes of this object as a hex string.
+            pub fn to_hex(&self) -> String {
+                hex::encode(self.as_slice())
+            }
+        }
+    };
+
+    ($name:ident, reversed) => {
+        impl std::fmt::Debug for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "{}({})", stringify!($name), self)
+            }
+        }
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                // The byte-reversed hex string is what RPC methods and block
+                // explorers display.
+                let mut data = *self.as_bytes();
+                data.reverse();
+                f.write_str(&hex::encode(data))
+            }
+        }
+
+        impl $name {
+            /// Parses an instance from its canonically-displayed
+            /// (byte-reversed) hexadecimal form.
+            pub fn from_hex(hex: &str) -> $crate::Result<Self> {
+                let mut data = hex::decode(hex)?;
+                let data_len = data.len();
+                data.reverse();
+                Self::from_vec(data).map_err(|_| $crate::Error::HexLengthMismatch {
+                    expected: Self::SIZE,
+                    actual: data_len,
+                })
+            }
+
+            /// Formats this value in its canonically-displayed
+            /// (byte-reversed) hexadecimal form.
+            pub fn to_hex(&self) -> String {
+                self.to_string()
             }
         }
     };

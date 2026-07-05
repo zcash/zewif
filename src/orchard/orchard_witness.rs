@@ -9,6 +9,7 @@ blob!(
     32,
     "A node in the Orchard note commitment tree."
 );
+crate::blob_hex!(MerkleHashOrchard, forward);
 impl Copy for MerkleHashOrchard {}
 
 /// An incremental witness for an Orchard note commitment, proving its

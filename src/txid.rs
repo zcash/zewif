@@ -5,9 +5,9 @@ use crate::blob;
 blob!(
     TxId,
     32,
-    "A 32-byte transaction identifier, displayed in reverse byte order by convention.",
-    reversed_hex
+    "A 32-byte transaction identifier, displayed in reverse byte order by convention."
 );
+crate::blob_hex!(TxId, reversed);
 impl Copy for TxId {}
 
 impl TxId {
