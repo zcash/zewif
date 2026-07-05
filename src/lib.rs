@@ -5,11 +5,11 @@
 //!
 //! ## Type Hierarchy
 //!
-//! - [`Zewif`]: Root container (wallets + global transaction history)
-//!   - [`ZewifWallet`]: Wallet (network, seed material, accounts)
-//!     - [`Account`]: Viewing key, addresses, transaction references
-//!       - [`Address`]: Protocol-specific address ([`ProtocolAddress`])
-//!   - [`Transaction`]: Transaction metadata and optional raw/compact data
+//! - [`Zewif`][]: Root container (wallets + global transaction history)
+//!   - [`ZewifWallet`][]: Wallet (network, seed material, accounts)
+//!     - [`Account`][]: Viewing key, addresses, transaction references
+//!       - [`Address`][]: Protocol-specific address ([`ProtocolAddress`])
+//!   - [`Transaction`][]: Transaction metadata and optional raw/compact data
 
 // Macros
 mod blob_macro;

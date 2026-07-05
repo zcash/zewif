@@ -28,6 +28,7 @@
 macro_rules! blob {
     ($name:ident, $size:expr, $doc:expr) => {
         #[doc = $doc]
+        #[derive(Clone)]
         pub struct $name([u8; $size]);
 
         impl $name {
@@ -127,13 +128,6 @@ macro_rules! blob {
         impl std::hash::Hash for $name {
             fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
                 self.0.hash(state)
-            }
-        }
-
-        impl Clone for $name {
-            #[allow(clippy::non_canonical_clone_impl)]
-            fn clone(&self) -> Self {
-                Self(self.0.clone())
             }
         }
 
