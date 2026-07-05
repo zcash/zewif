@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use crate::{BlockHash, BlockHeight, Extensions, Secrets, blob};
 
 blob!(ExportId, 32, "A random identifier for a ZeWIF export.");
-crate::blob_hex!(ExportId, forward);
+crate::blob_encoding!(ExportId, bytes);
 impl Copy for ExportId {}
 
 use super::{Transaction, TxId, ZewifWallet};

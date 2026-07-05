@@ -3,7 +3,7 @@ use minicbor::{Decode, Encode};
 use crate::{BlockHash, BlockHeight, blob};
 
 blob!(MerkleNode, 32, "A node hash in a note commitment tree.");
-crate::blob_hex!(MerkleNode, forward);
+crate::blob_encoding!(MerkleNode, bytes);
 impl Copy for MerkleNode {}
 
 /// The state of a note commitment tree as of some block (mirrors

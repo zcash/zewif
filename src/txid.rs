@@ -7,7 +7,7 @@ blob!(
     32,
     "A 32-byte transaction identifier, displayed in reverse byte order by convention."
 );
-crate::blob_hex!(TxId, reversed);
+crate::blob_encoding!(TxId, reversed_hex);
 impl Copy for TxId {}
 
 impl TxId {

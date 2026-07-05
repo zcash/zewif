@@ -7,7 +7,7 @@ blob!(
     32,
     "A 32-byte block hash, displayed in reverse byte order by convention."
 );
-crate::blob_hex!(BlockHash, reversed);
+crate::blob_encoding!(BlockHash, reversed_hex);
 impl Copy for BlockHash {}
 
 impl BlockHash {

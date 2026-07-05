@@ -32,7 +32,7 @@ needed when reconstructing or validating shielded transactions during wallet mig
 let anchor = Anchor::new([0u8; 32]);
 ```"#
 );
-crate::blob_hex!(Anchor, forward);
+crate::blob_encoding!(Anchor, bytes);
 impl Copy for Anchor {}
 
 #[cfg(test)]

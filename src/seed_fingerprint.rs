@@ -5,7 +5,7 @@ blob!(
     32,
     "The fingerprint of an HD seed, as defined in ZIP 32"
 );
-crate::blob_hex!(SeedFingerprint, forward);
+crate::blob_encoding!(SeedFingerprint, bytes);
 impl Copy for SeedFingerprint {}
 
 #[cfg(test)]
