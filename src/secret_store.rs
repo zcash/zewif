@@ -2,7 +2,8 @@ use minicbor::{Decode, Encode};
 
 use crate::{
     Data, Extensions, SeedFingerprint, SeedMaterial, sapling::SaplingExtendedSpendingKey,
-    sprout::SproutSpendingKey, transparent::TransparentSpendingKey,
+    sapling::SaplingExtendedFullViewingKey, sprout::SproutSpendingKey,
+    transparent::{TransparentPubKey, TransparentSpendingKey},
 };
 
 #[cfg(feature = "encryption")]
@@ -200,23 +201,22 @@ impl SeedEntry {
     }
 }
 
-/// A transparent private key stored under its secp256k1 public key
-/// (33 or 65 bytes).
+/// A transparent private key stored under its secp256k1 public key.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 #[cbor(map)]
 pub struct TransparentKeyEntry {
     #[n(0)]
-    pubkey: Data,
+    pubkey: TransparentPubKey,
     #[n(1)]
     key: TransparentSpendingKey,
 }
 
 impl TransparentKeyEntry {
-    pub fn new(pubkey: Data, key: TransparentSpendingKey) -> Self {
+    pub fn new(pubkey: TransparentPubKey, key: TransparentSpendingKey) -> Self {
         Self { pubkey, key }
     }
 
-    pub fn pubkey(&self) -> &Data {
+    pub fn pubkey(&self) -> &TransparentPubKey {
         &self.pubkey
     }
 
@@ -231,17 +231,17 @@ impl TransparentKeyEntry {
 #[cbor(map)]
 pub struct SaplingKeyEntry {
     #[n(0)]
-    fvk: Data,
+    fvk: SaplingExtendedFullViewingKey,
     #[n(1)]
     key: SaplingExtendedSpendingKey,
 }
 
 impl SaplingKeyEntry {
-    pub fn new(fvk: Data, key: SaplingExtendedSpendingKey) -> Self {
+    pub fn new(fvk: SaplingExtendedFullViewingKey, key: SaplingExtendedSpendingKey) -> Self {
         Self { fvk, key }
     }
 
-    pub fn fvk(&self) -> &Data {
+    pub fn fvk(&self) -> &SaplingExtendedFullViewingKey {
         &self.fvk
     }
 
@@ -281,8 +281,9 @@ impl SproutKeyEntry {
 mod tests {
     use crate::{
         Data, Extensions, RandomInstance, SeedFingerprint, SeedMaterial,
-        sapling::SaplingExtendedSpendingKey, sprout::SproutSpendingKey, test_cbor_roundtrip,
-        transparent::TransparentSpendingKey,
+        sapling::{SaplingExtendedFullViewingKey, SaplingExtendedSpendingKey},
+        sprout::SproutSpendingKey, test_cbor_roundtrip,
+        transparent::{TransparentPubKey, TransparentSpendingKey},
     };
 
     use super::{
@@ -298,13 +299,16 @@ mod tests {
 
     impl RandomInstance for TransparentKeyEntry {
         fn random() -> Self {
-            Self::new(Data::random_with_size(33), TransparentSpendingKey::random())
+            Self::new(TransparentPubKey::random(), TransparentSpendingKey::random())
         }
     }
 
     impl RandomInstance for SaplingKeyEntry {
         fn random() -> Self {
-            Self::new(Data::random(), SaplingExtendedSpendingKey::random())
+            Self::new(
+                SaplingExtendedFullViewingKey::random(),
+                SaplingExtendedSpendingKey::random(),
+            )
         }
     }
 

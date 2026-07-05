@@ -15,12 +15,12 @@ use zewif::{
     DerivedKeySource, DiversifierIndex, EncryptedStore, ExportId, Frontier, FrontierData,
     IncrementalWitness, IronwoodOutputData, KeyScope, KeySource, LegacySeed, Memo, MerkleNode,
     MnemonicLanguage, Network, NonHardenedChildIndex, Nullifier, OrchardOutputData,
-    ProtocolAddress, RawTxData, ReceivedOutput, ReceivedOutputPool, RegtestParams, SaplingExtFvk,
-    SaplingKeyEntry, SaplingOutputData, ScanRange, Script, SecretStore, Secrets, SeedEntry,
-    SeedFingerprint, SeedMaterial, SentOutput, SproutKeyEntry, SproutOutputData, Transaction,
-    TransactionData, TransparentKeyEntry, TransparentOutputData, TreePosition, TxBlockPosition,
-    TxId, UnifiedAddress, UnifiedFullViewingKey, Zewif, ZewifWallet, ironwood, orchard, sapling,
-    sprout, transparent,
+    ProtocolAddress, RawTxData, ReceivedOutput, ReceivedOutputPool, RegtestParams, SaplingKeyEntry,
+    SaplingOutputData, ScanRange, Script, SecretStore, Secrets, SeedEntry, SeedFingerprint,
+    SeedMaterial, SentOutput, SproutKeyEntry, SproutOutputData, Transaction, TransactionData,
+    TransparentKeyEntry, TransparentOutputData, TreePosition, TxBlockPosition, TxId,
+    UnifiedAddress, UnifiedFullViewingKey, Zewif, ZewifWallet, ironwood, orchard, sapling, sprout,
+    transparent,
 };
 
 const MINIMAL_GOLDEN: &[u8] = include_bytes!("fixtures/v1/minimal.zewif");
@@ -224,9 +224,9 @@ fn ufvk_account() -> Account {
 /// path, exercising `legacy_address_index` and position-form tree data
 /// without enrichment.
 fn sapling_account() -> Account {
-    let mut account = Account::new(AccountViewingKey::SaplingExtFvk(SaplingExtFvk::new(
+    let mut account = Account::new(AccountViewingKey::SaplingExtFvk(
         sapling::SaplingExtendedFullViewingKey::new([0x2A; 169]),
-    )));
+    ));
     account.set_name("Legacy Sapling");
     account.set_key_source(KeySource::Derived(DerivedKeySource::new(
         SeedFingerprint::new(SEED_FINGERPRINT),
@@ -261,7 +261,7 @@ fn sapling_account() -> Account {
 /// An imported, view-only Sprout account.
 fn sprout_account() -> Account {
     let mut account = Account::new(AccountViewingKey::SproutViewingKey(
-        sprout::SproutViewingKey::new(Data::from_slice(&[0x3C; 64])),
+        sprout::SproutViewingKey::new([0x3C; 67]),
     ));
     account.set_name("Sprout relic");
     account.set_key_source(KeySource::Imported);
@@ -320,7 +320,9 @@ fn transparent_account() -> Account {
 
     // A watch-only address imported by public key (zcashd importpubkey).
     let mut watch_pubkey = transparent::Address::new("t1fixtureWatchOnlyPubkey0000000000");
-    watch_pubkey.set_pubkey(Data::from_slice(&[0x02; 33]));
+    watch_pubkey.set_pubkey(
+        transparent::TransparentPubKey::from_bytes(vec![0x02; 33]).expect("valid pubkey"),
+    );
     let mut address = Address::new(ProtocolAddress::Transparent(watch_pubkey));
     address.set_scope(KeyScope::Foreign);
     account.add_address(address);
@@ -482,19 +484,19 @@ fn secret_store() -> SecretStore {
     ));
     store.add_seed(SeedEntry::new(
         SeedFingerprint::new([0x9E; 32]),
-        SeedMaterial::LegacySeed(LegacySeed::new(Data::from_slice(&[0x9F; 32]))),
+        SeedMaterial::LegacySeed(LegacySeed::new([0x9F; 32])),
     ));
     store.add_transparent_key(TransparentKeyEntry::new(
-        Data::from_slice(&[0x02; 33]),
+        transparent::TransparentPubKey::from_bytes(vec![0x02; 33]).expect("valid pubkey"),
         transparent::TransparentSpendingKey::new([0x4B; 32]),
     ));
     store.add_sapling_key(SaplingKeyEntry::new(
-        Data::from_slice(&[0x2A; 169]),
+        sapling::SaplingExtendedFullViewingKey::new([0x2A; 169]),
         sapling::SaplingExtendedSpendingKey::new([0x5B; 169]),
     ));
     store.add_sprout_key(SproutKeyEntry::new(
         "zcfixturesproutaddress00000000000000000000000000000000000000000000000000000000000000000000000",
-        sprout::SproutSpendingKey::new(Data::from_slice(&[0x6B; 32])),
+        sprout::SproutSpendingKey::new([0x6B; 34]),
     ));
     // CBOR 100
     store.extensions_mut().add(

@@ -1,5 +1,6 @@
 use super::TransparentSpendAuthority;
-use crate::{Data, Script};
+use super::TransparentPubKey;
+use crate::Script;
 use minicbor::{Decode, Encode};
 
 /// A transparent Zcash address (t-address).
@@ -19,7 +20,7 @@ pub struct Address {
     /// when spend authority is present, since the public key is then
     /// derivable.
     #[n(2)]
-    pubkey: Option<Data>,
+    pubkey: Option<TransparentPubKey>,
     /// The redeem script for a watch-only P2SH address imported by script
     /// (zcashd importaddress). A watch-only entry imported by bare address
     /// string carries neither pubkey nor redeem_script.
@@ -49,11 +50,11 @@ impl Address {
         self.spend_authority = Some(spend_authority);
     }
 
-    pub fn pubkey(&self) -> Option<&Data> {
+    pub fn pubkey(&self) -> Option<&TransparentPubKey> {
         self.pubkey.as_ref()
     }
 
-    pub fn set_pubkey(&mut self, pubkey: Data) {
+    pub fn set_pubkey(&mut self, pubkey: TransparentPubKey) {
         self.pubkey = Some(pubkey);
     }
 
@@ -72,7 +73,7 @@ impl crate::RandomInstance for Address {
         Self {
             address: String::random(),
             spend_authority: super::TransparentSpendAuthority::opt_random(),
-            pubkey: crate::Data::opt_random_with_size(33),
+            pubkey: crate::transparent::TransparentPubKey::opt_random(),
             redeem_script: crate::Script::opt_random(),
         }
     }

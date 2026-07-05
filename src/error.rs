@@ -19,6 +19,11 @@ pub enum Error {
     #[error("Invalid hex string: {0}")]
     InvalidHexString(#[from] hex::FromHexError),
 
+    /// A transparent public key must be 33 (compressed) or 65
+    /// (uncompressed) bytes; carries the rejected length.
+    #[error("Invalid transparent public key length: {0}")]
+    InvalidTransparentPubKeyLength(usize),
+
     #[error("Slice conversion error: {0}")]
     TryFromSliceError(#[from] TryFromSliceError),
 

@@ -184,6 +184,8 @@ macro_rules! blob {
 ///   text encoding is defined elsewhere and not stored by zewif, as for
 ///   incoming viewing keys). No parsing or formatting API is generated;
 ///   `Debug` output shows the bytes in hexadecimal for diagnostics only.
+/// - `redacted`: the type is secret material; `Debug` output elides the
+///   content entirely.
 /// - `reversed_hex`: `Display`, `Debug`, `from_hex`, and `to_hex` use the
 ///   byte-reversed (big-endian) hexadecimal form that RPC methods and block
 ///   explorers display. Only transaction identifiers and block hashes are
@@ -196,6 +198,14 @@ macro_rules! blob_encoding {
                 // Diagnostic form only: these bytes have no canonical
                 // textual encoding within zewif.
                 write!(f, "{}({})", stringify!($name), hex::encode(self.as_slice()))
+            }
+        }
+    };
+
+    ($name:ident, redacted) => {
+        impl std::fmt::Debug for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "{}(<elided>)", stringify!($name))
             }
         }
     };
