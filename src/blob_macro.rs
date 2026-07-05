@@ -14,10 +14,13 @@
 /// blob!(ExampleHash, 32, "An example 32-byte hash type");
 /// ```
 ///
-/// Hex parsing and display are provided separately by the [`blob_hex!`]
-/// macro, which every `blob!` type pairs with to declare its canonical hex
-/// convention (`forward` byte order, or `reversed` for the hash-display
-/// convention used by transaction identifiers and block hashes).
+/// Textual encoding is provided separately by the [`blob_encoding!`] macro,
+/// which every `blob!` type pairs with to declare its canonical encoding:
+/// `bytes` for types that are definitionally byte content (no hex API is
+/// generated; `Debug` output shows the bytes in hex for diagnostics only),
+/// or `reversed_hex` for the hash-display convention used by transaction
+/// identifiers and block hashes — the only zewif types with a canonical
+/// hexadecimal encoding.
 ///
 /// # Generated Functionality
 ///
@@ -172,46 +175,32 @@ macro_rules! blob {
     };
 }
 
-/// Declares the canonical hexadecimal convention for a [`blob!`] type,
-/// generating its `Debug` implementation and hex parsing/formatting.
+/// Declares the canonical encoding of a [`blob!`] type, generating its
+/// `Debug` implementation and (where one exists) its textual encoding.
 ///
-/// Every `blob!` type pairs with exactly one `blob_hex!` invocation:
+/// Every `blob!` type pairs with exactly one `blob_encoding!` invocation:
 ///
-/// - `forward`: `Debug`, `from_hex`, and `to_hex` use the bytes in their
-///   stored order. This is the convention for nullifiers, Merkle hashes,
-///   key material, and fingerprints.
-/// - `reversed`: `Display`, `Debug`, `from_hex`, and `to_hex` use the
-///   byte-reversed (big-endian) form that RPC methods and block explorers
-///   display. Only transaction identifiers and block hashes are canonically
-///   encoded in this fashion.
+/// - `bytes`: the type is definitionally byte content (or its canonical
+///   text encoding is defined elsewhere and not stored by zewif, as for
+///   incoming viewing keys). No parsing or formatting API is generated;
+///   `Debug` output shows the bytes in hexadecimal for diagnostics only.
+/// - `reversed_hex`: `Display`, `Debug`, `from_hex`, and `to_hex` use the
+///   byte-reversed (big-endian) hexadecimal form that RPC methods and block
+///   explorers display. Only transaction identifiers and block hashes are
+///   canonically encoded in this fashion.
 #[macro_export]
-macro_rules! blob_hex {
-    ($name:ident, forward) => {
+macro_rules! blob_encoding {
+    ($name:ident, bytes) => {
         impl std::fmt::Debug for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(f, "{}({})", stringify!($name), self.to_hex())
-            }
-        }
-
-        impl $name {
-            /// Parses an instance from a hex string.
-            pub fn from_hex(hex: &str) -> $crate::Result<Self> {
-                let data = hex::decode(hex)?;
-                let data_len = data.len();
-                Self::from_vec(data).map_err(|_| $crate::Error::HexLengthMismatch {
-                    expected: Self::SIZE,
-                    actual: data_len,
-                })
-            }
-
-            /// Formats the bytes of this object as a hex string.
-            pub fn to_hex(&self) -> String {
-                hex::encode(self.as_slice())
+                // Diagnostic form only: these bytes have no canonical
+                // textual encoding within zewif.
+                write!(f, "{}({})", stringify!($name), hex::encode(self.as_slice()))
             }
         }
     };
 
-    ($name:ident, reversed) => {
+    ($name:ident, reversed_hex) => {
         impl std::fmt::Debug for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                 write!(f, "{}({})", stringify!($name), self)

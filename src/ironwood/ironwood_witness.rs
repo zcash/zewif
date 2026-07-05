@@ -9,7 +9,7 @@ blob!(
     32,
     "A node in the Ironwood note commitment tree."
 );
-crate::blob_hex!(MerkleHashIronwood, forward);
+crate::blob_encoding!(MerkleHashIronwood, bytes);
 impl Copy for MerkleHashIronwood {}
 
 /// An incremental witness for an Ironwood note commitment, proving its

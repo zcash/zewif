@@ -12,7 +12,7 @@ blob!(
     32,
     "A Zcash transparent private key"
 );
-crate::blob_hex!(TransparentSpendingKey, forward);
+crate::blob_encoding!(TransparentSpendingKey, bytes);
 impl Copy for TransparentSpendingKey {}
 
 #[cfg(test)]

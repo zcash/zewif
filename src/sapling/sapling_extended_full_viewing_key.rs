@@ -17,7 +17,7 @@ blob!(
     169,
     "A Sapling Extended Full Viewing Key, encoded as specified in ZIP 32"
 );
-crate::blob_hex!(SaplingExtendedFullViewingKey, forward);
+crate::blob_encoding!(SaplingExtendedFullViewingKey, bytes);
 
 #[cfg(test)]
 mod tests {

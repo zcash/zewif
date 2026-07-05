@@ -14,7 +14,7 @@ blob!(
     169,
     "A Sapling Extended Spending Key, encoded as specified in ZIP 32"
 );
-crate::blob_hex!(SaplingExtendedSpendingKey, forward);
+crate::blob_encoding!(SaplingExtendedSpendingKey, bytes);
 
 #[cfg(test)]
 mod tests {
