@@ -91,6 +91,7 @@ chain-state = {
   ? 1: bytes32,                 ; hash of that block
   ? 2: frontier,                ; Sapling note commitment tree frontier
   ? 3: frontier,                ; Orchard note commitment tree frontier
+  ? 4: frontier,                ; Ironwood note commitment tree frontier
 }                               ; future pools: new indices
 
 frontier = [0, []]              ; the tree is empty as of the block
@@ -210,6 +211,7 @@ received-output-pool = [0, [transparent-output-data]]
                      / [1, [sprout-output-data]]
                      / [2, [sapling-output-data]]
                      / [3, [orchard-output-data]]
+                     / [4, [ironwood-output-data]]
 
 transparent-output-data = {
   ? 0: bstr,                    ; scriptPubKey, for UTXOs whose containing
@@ -230,6 +232,14 @@ sapling-output-data = {
 }
 
 orchard-output-data = {
+  ? 0: commitment-tree-data,
+  ? 1: bytes32,                 ; nullifier
+}
+
+; The Ironwood pool (introduced by the NU6.3 network upgrade) uses the
+; Orchard protocol -- the same circuit and bundle schema -- but constitutes
+; a distinct value pool with its own note commitment tree.
+ironwood-output-data = {
   ? 0: commitment-tree-data,
   ? 1: bytes32,                 ; nullifier
 }
@@ -257,6 +267,7 @@ incremental-witness = {
 sent-output = [0, [transparent-sent-output]]
             / [1, [sapling-sent-output]]
             / [2, [orchard-sent-output]]
+            / [3, [ironwood-sent-output]]
 
 transparent-sent-output = {
   0: uint,                      ; output-index within the transaction's vout
@@ -275,6 +286,13 @@ sapling-sent-output = {
 
 orchard-sent-output = {
   0: uint,                      ; action index within the Orchard action list
+  1: tstr,                      ; recipient address, verbatim
+  2: uint,                      ; value in zatoshis
+  ? 3: bstr,                    ; memo
+}
+
+ironwood-sent-output = {
+  0: uint,                      ; action index within the Ironwood action list
   1: tstr,                      ; recipient address, verbatim
   2: uint,                      ; value in zatoshis
   ? 3: bstr,                    ; memo
