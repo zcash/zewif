@@ -13,14 +13,14 @@ use zewif::{
     Account, AccountPurpose, AccountViewingKey, Address, AddressBookEntry, Amount, Bip39Mnemonic,
     BlockHash, BlockHeight, ChainState, CommitmentTreeData, CompactTxData, Data, DerivationInfo,
     DerivedKeySource, DiversifierIndex, EncryptedStore, ExportId, Frontier, FrontierData,
-    IncrementalWitness, KeyScope, KeySource, LegacySeed, Memo, MerkleNode, MnemonicLanguage,
-    Network, NonHardenedChildIndex, Nullifier, OrchardOutputData, ProtocolAddress, RawTxData,
-    ReceivedOutput, ReceivedOutputPool, RegtestParams, SaplingExtFvk, SaplingKeyEntry,
-    SaplingOutputData, ScanRange, Script, SecretStore, Secrets, SeedEntry, SeedFingerprint,
-    SeedMaterial, SentOutput, SproutKeyEntry, SproutOutputData, Transaction, TransactionData,
-    TransparentKeyEntry, TransparentOutputData, TreePosition, TxBlockPosition, TxId,
-    UnifiedAddress, UnifiedFullViewingKey, Zewif, ZewifWallet, orchard, sapling, sprout,
-    transparent,
+    IncrementalWitness, IronwoodOutputData, KeyScope, KeySource, LegacySeed, Memo, MerkleNode,
+    MnemonicLanguage, Network, NonHardenedChildIndex, Nullifier, OrchardOutputData,
+    ProtocolAddress, RawTxData, ReceivedOutput, ReceivedOutputPool, RegtestParams, SaplingExtFvk,
+    SaplingKeyEntry, SaplingOutputData, ScanRange, Script, SecretStore, Secrets, SeedEntry,
+    SeedFingerprint, SeedMaterial, SentOutput, SproutKeyEntry, SproutOutputData, Transaction,
+    TransactionData, TransparentKeyEntry, TransparentOutputData, TreePosition, TxBlockPosition,
+    TxId, UnifiedAddress, UnifiedFullViewingKey, Zewif, ZewifWallet, ironwood, orchard, sapling,
+    sprout, transparent,
 };
 
 const MINIMAL_GOLDEN: &[u8] = include_bytes!("fixtures/v1/minimal.zewif");
@@ -75,9 +75,21 @@ fn orchard_witness() -> orchard::OrchardWitness {
     .into()
 }
 
+fn ironwood_witness() -> ironwood::IronwoodWitness {
+    IncrementalWitness::from_parts(
+        ironwood::MerkleHashIronwood::new([0x71; 32]),
+        7,
+        vec![ironwood::MerkleHashIronwood::new([0x72; 32])],
+        ironwood::MerkleHashIronwood::new([0x74; 32]),
+        12,
+        vec![ironwood::MerkleHashIronwood::new([0x75; 32])],
+    )
+    .into()
+}
+
 /// A modern UFVK account exercising the birthday fields (including a chain
 /// state with one empty and one non-empty frontier), scan ranges, a unified
-/// address, witness-form tree data, and sent outputs in all three pools.
+/// address, witness-form tree data, and sent outputs in all four pools.
 fn ufvk_account() -> Account {
     let mut account = Account::new(AccountViewingKey::Ufvk(UnifiedFullViewingKey::new(
         "uview1fixture0account0viewing0key0000000000",
@@ -93,6 +105,7 @@ fn ufvk_account() -> Account {
     let mut chain_state = ChainState::new(BlockHeight::from_u32(1_799_999));
     chain_state.set_block_hash(BlockHash::from_bytes([0x1C; 32]));
     chain_state.set_sapling_tree(Frontier::Empty);
+    chain_state.set_ironwood_tree(Frontier::Empty);
     chain_state.set_orchard_tree(Frontier::NonEmpty(FrontierData::from_parts(
         1234,
         MerkleNode::new([0x1D; 32]),
@@ -145,9 +158,16 @@ fn ufvk_account() -> Account {
             Some(Nullifier::new([0x6A; 32])),
         )),
     );
+    let ironwood_received = ReceivedOutput::new(
+        2,
+        ReceivedOutputPool::Ironwood(IronwoodOutputData::new(
+            Some(CommitmentTreeData::Witness(ironwood_witness())),
+            Some(Nullifier::new([0x7A; 32])),
+        )),
+    );
     account.add_relevant_transaction(
         TxId::from_bytes(TXID_FULL),
-        vec![sapling_received, orchard_received],
+        vec![sapling_received, orchard_received, ironwood_received],
     );
 
     // Position-form tree data with partial enrichment.
@@ -181,6 +201,12 @@ fn ufvk_account() -> Account {
                 "u1fixturerecipientalice000000000000000000000".to_string(),
                 Amount::const_from_u64(50_000_000),
                 None,
+            )),
+            SentOutput::Ironwood(ironwood::IronwoodSentOutput::from_parts(
+                3,
+                "u1fixturerecipientcarol000000000000000000000".to_string(),
+                Amount::const_from_u64(75_000_000),
+                Some(Memo::new(b"Ironwood test payment".to_vec())),
             )),
         ],
     );

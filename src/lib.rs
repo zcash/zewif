@@ -32,6 +32,7 @@ mod test_roundtrip_macros;
 mod_use!(test_utils);
 
 // Modules requiring qualified paths
+pub mod ironwood;
 pub mod orchard;
 pub mod sapling;
 pub mod sprout;

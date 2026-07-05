@@ -1,7 +1,8 @@
 use minicbor::{Decode, Encode};
 
 use crate::{
-    orchard::OrchardSentOutput, sapling::SaplingSentOutput, transparent::TransparentSentOutput,
+    ironwood::IronwoodSentOutput, orchard::OrchardSentOutput, sapling::SaplingSentOutput,
+    transparent::TransparentSentOutput,
 };
 
 /// A sent output from a transaction, tagged by pool.
@@ -23,6 +24,8 @@ pub enum SentOutput {
     Sapling(#[n(0)] SaplingSentOutput),
     #[n(2)]
     Orchard(#[n(0)] OrchardSentOutput),
+    #[n(3)]
+    Ironwood(#[n(0)] IronwoodSentOutput),
 }
 
 impl SentOutput {
@@ -33,6 +36,7 @@ impl SentOutput {
             SentOutput::Transparent(o) => o.output_index(),
             SentOutput::Sapling(o) => o.output_index(),
             SentOutput::Orchard(o) => o.output_index(),
+            SentOutput::Ironwood(o) => o.output_index(),
         }
     }
 }
@@ -47,10 +51,11 @@ mod tests {
         fn random() -> Self {
             use rand::Rng;
             let mut rng = rand::rng();
-            match rng.random_range(0..3u32) {
+            match rng.random_range(0..4u32) {
                 0 => SentOutput::Transparent(crate::transparent::TransparentSentOutput::random()),
                 1 => SentOutput::Sapling(crate::sapling::SaplingSentOutput::random()),
-                _ => SentOutput::Orchard(crate::orchard::OrchardSentOutput::random()),
+                2 => SentOutput::Orchard(crate::orchard::OrchardSentOutput::random()),
+                _ => SentOutput::Ironwood(crate::ironwood::IronwoodSentOutput::random()),
             }
         }
     }

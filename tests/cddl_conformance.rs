@@ -19,14 +19,14 @@ use std::path::Path;
 use zewif::{
     Account, AccountPurpose, AccountViewingKey, Address, AddressBookEntry, Amount, Bip39Mnemonic,
     BlockHash, BlockHeight, ChainState, CommitmentTreeData, CompactTxData, Data, DerivationInfo,
-    DerivedKeySource, DiversifierIndex, ExportId, Frontier, FrontierData, KeyScope, KeySource,
-    LegacySeed, Memo, MerkleNode, MnemonicLanguage, Network, Nullifier, OrchardOutputData,
-    ProtocolAddress, RawTxData, ReceivedOutput, ReceivedOutputPool, RegtestParams, SaplingExtFvk,
-    SaplingKeyEntry, SaplingOutputData, ScanRange, Script, SecretStore, Secrets, SeedEntry,
-    SeedFingerprint, SeedMaterial, SentOutput, SproutKeyEntry, SproutOutputData, Transaction,
-    TransactionData, TransparentKeyEntry, TransparentOutputData, TreePosition, TxBlockPosition,
-    TxId, UnifiedAddress, UnifiedFullViewingKey, Zewif, ZewifWallet, orchard, sapling, sprout,
-    transparent,
+    DerivedKeySource, DiversifierIndex, ExportId, Frontier, FrontierData, IronwoodOutputData,
+    KeyScope, KeySource, LegacySeed, Memo, MerkleNode, MnemonicLanguage, Network, Nullifier,
+    OrchardOutputData, ProtocolAddress, RawTxData, ReceivedOutput, ReceivedOutputPool,
+    RegtestParams, SaplingExtFvk, SaplingKeyEntry, SaplingOutputData, ScanRange, Script,
+    SecretStore, Secrets, SeedEntry, SeedFingerprint, SeedMaterial, SentOutput, SproutKeyEntry,
+    SproutOutputData, Transaction, TransactionData, TransparentKeyEntry, TransparentOutputData,
+    TreePosition, TxBlockPosition, TxId, UnifiedAddress, UnifiedFullViewingKey, Zewif, ZewifWallet,
+    orchard, sapling, sprout, transparent,
 };
 
 fn height(h: u32) -> BlockHeight {
@@ -60,6 +60,11 @@ fn ufvk_account(txid1: TxId, txid2: TxId) -> Account {
         vec![MerkleNode::new([0xCD; 32]), MerkleNode::new([0xCE; 32])],
     )));
     chain_state.set_orchard_tree(Frontier::Empty);
+    chain_state.set_ironwood_tree(Frontier::NonEmpty(FrontierData::from_parts(
+        77,
+        MerkleNode::new([0xD0; 32]),
+        vec![MerkleNode::new([0xD1; 32])],
+    )));
     account.set_birthday_chain_state(chain_state);
     account.set_recover_until_height(height(2_100_000));
     account.set_purpose(AccountPurpose::Spending);
@@ -142,9 +147,22 @@ fn ufvk_account(txid1: TxId, txid2: TxId) -> Account {
     orchard_received.set_value(zats(7_0000_0000));
     orchard_received.set_is_change(true);
 
+    let ironwood_received = ReceivedOutput::new(
+        1,
+        ReceivedOutputPool::Ironwood(IronwoodOutputData::new(
+            Some(CommitmentTreeData::Position(TreePosition::new(1_729))),
+            None,
+        )),
+    );
+
     account.add_relevant_transaction(
         txid1,
-        vec![transparent_received, sapling_received, orchard_received],
+        vec![
+            transparent_received,
+            sapling_received,
+            orchard_received,
+            ironwood_received,
+        ],
     );
 
     let sprout_received = ReceivedOutput::new(
