@@ -48,8 +48,11 @@ fn machine_readable_schema_matches_spec() {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let spec = std::fs::read_to_string(manifest_dir.join("docs/draft-nuttycom-zewif.md"))
         .expect("spec document is readable");
+    // Normalize line endings: git checkouts with autocrlf (Windows CI) yield
+    // CRLF in the working tree, while the extractor emits LF-terminated lines.
     let machine_copy = std::fs::read_to_string(manifest_dir.join("docs/zewif.cddl"))
-        .expect("machine-readable schema is readable");
+        .expect("machine-readable schema is readable")
+        .replace("\r\n", "\n");
 
     assert_eq!(
         extract_cddl_block(&spec),
