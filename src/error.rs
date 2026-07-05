@@ -13,9 +13,6 @@ pub enum Error {
     #[error("Invalid language value: {0}")]
     InvalidLanguage(String),
 
-    #[error("Invalid MnemonicLanguage string: {0}")]
-    InvalidMnemonicLanguage(String),
-
     #[error("Hex parsing error: expected {expected} bytes, got {actual}")]
     HexLengthMismatch { expected: usize, actual: usize },
 

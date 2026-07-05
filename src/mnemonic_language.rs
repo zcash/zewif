@@ -40,28 +40,33 @@ use crate::error::{Error, Result};
 /// println!("Mnemonic language: {}", language); // Outputs "Mnemonic language: English"
 /// # Ok::<(), zewif::Error>(())
 /// ```
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum MnemonicLanguage {
-    /// English wordlist (the most commonly used)
-    English = 0,
-    /// Simplified Chinese wordlist
-    SimplifiedChinese = 1,
-    /// Traditional Chinese wordlist
-    TraditionalChinese = 2,
-    /// Czech wordlist
-    Czech = 3,
-    /// French wordlist
-    French = 4,
-    /// Italian wordlist
-    Italian = 5,
-    /// Japanese wordlist
-    Japanese = 6,
-    /// Korean wordlist
-    Korean = 7,
-    /// Portuguese wordlist
-    Portuguese = 8,
-    /// Spanish wordlist
-    Spanish = 9,
+    /// English wordlist (the most commonly used); zcashd language id 0
+    English,
+    /// Simplified Chinese wordlist; zcashd language id 1
+    SimplifiedChinese,
+    /// Traditional Chinese wordlist; zcashd language id 2
+    TraditionalChinese,
+    /// Czech wordlist; zcashd language id 3
+    Czech,
+    /// French wordlist; zcashd language id 4
+    French,
+    /// Italian wordlist; zcashd language id 5
+    Italian,
+    /// Japanese wordlist; zcashd language id 6
+    Japanese,
+    /// Korean wordlist; zcashd language id 7
+    Korean,
+    /// Portuguese wordlist; zcashd language id 8
+    Portuguese,
+    /// Spanish wordlist; zcashd language id 9
+    Spanish,
+    /// A BCP 47 language tag outside the set of known BIP-39 wordlist
+    /// languages, preserved verbatim. The schema admits any `tstr` in the
+    /// language position, so an unrecognized tag round-trips unchanged rather
+    /// than failing to decode.
+    Other(String),
 }
 
 impl MnemonicLanguage {
@@ -116,7 +121,8 @@ impl MnemonicLanguage {
     /// and human-readable representations.
     ///
     /// # Returns
-    /// A static string containing the name of the language.
+    /// The name of the language; for an [`Other`](MnemonicLanguage::Other)
+    /// tag, the verbatim BCP 47 tag it carries.
     ///
     /// # Examples
     /// ```
@@ -127,7 +133,7 @@ impl MnemonicLanguage {
     /// let language = MnemonicLanguage::Japanese;
     /// assert_eq!(language.name(), "Japanese");
     /// ```
-    pub fn name(&self) -> &'static str {
+    pub fn name(&self) -> &str {
         match self {
             MnemonicLanguage::English => "English",
             MnemonicLanguage::SimplifiedChinese => "SimplifiedChinese",
@@ -139,6 +145,26 @@ impl MnemonicLanguage {
             MnemonicLanguage::Korean => "Korean",
             MnemonicLanguage::Portuguese => "Portuguese",
             MnemonicLanguage::Spanish => "Spanish",
+            MnemonicLanguage::Other(tag) => tag,
+        }
+    }
+
+    /// Returns the BCP 47 language tag for this language, as stored in the
+    /// `bip39-mnemonic` record. An [`Other`](MnemonicLanguage::Other) tag is
+    /// returned verbatim.
+    fn tag(&self) -> &str {
+        match self {
+            MnemonicLanguage::English => "en",
+            MnemonicLanguage::SimplifiedChinese => "zh-Hans",
+            MnemonicLanguage::TraditionalChinese => "zh-Hant",
+            MnemonicLanguage::Czech => "cs",
+            MnemonicLanguage::French => "fr",
+            MnemonicLanguage::Italian => "it",
+            MnemonicLanguage::Japanese => "ja",
+            MnemonicLanguage::Korean => "ko",
+            MnemonicLanguage::Portuguese => "pt",
+            MnemonicLanguage::Spanish => "es",
+            MnemonicLanguage::Other(tag) => tag,
         }
     }
 }
@@ -160,36 +186,30 @@ impl std::fmt::Debug for MnemonicLanguage {
 impl From<MnemonicLanguage> for String {
     fn from(value: MnemonicLanguage) -> Self {
         match value {
-            MnemonicLanguage::English => "en".to_string(),
-            MnemonicLanguage::SimplifiedChinese => "zh-Hans".to_string(),
-            MnemonicLanguage::TraditionalChinese => "zh-Hant".to_string(),
-            MnemonicLanguage::Czech => "cs".to_string(),
-            MnemonicLanguage::French => "fr".to_string(),
-            MnemonicLanguage::Italian => "it".to_string(),
-            MnemonicLanguage::Japanese => "ja".to_string(),
-            MnemonicLanguage::Korean => "ko".to_string(),
-            MnemonicLanguage::Portuguese => "pt".to_string(),
-            MnemonicLanguage::Spanish => "es".to_string(),
+            // Move the tag out of an `Other` rather than reallocating it.
+            MnemonicLanguage::Other(tag) => tag,
+            known => known.tag().to_string(),
         }
     }
 }
 
-impl TryFrom<String> for MnemonicLanguage {
-    type Error = Error;
-
-    fn try_from(value: String) -> crate::error::Result<Self> {
+impl From<String> for MnemonicLanguage {
+    /// Interprets a BCP 47 language tag. Any tag outside the known BIP-39
+    /// wordlist languages is preserved as [`Other`](MnemonicLanguage::Other),
+    /// so this conversion is total.
+    fn from(value: String) -> Self {
         match value.as_str() {
-            "en" => Ok(MnemonicLanguage::English),
-            "zh-Hans" => Ok(MnemonicLanguage::SimplifiedChinese),
-            "zh-Hant" => Ok(MnemonicLanguage::TraditionalChinese),
-            "cs" => Ok(MnemonicLanguage::Czech),
-            "fr" => Ok(MnemonicLanguage::French),
-            "it" => Ok(MnemonicLanguage::Italian),
-            "ja" => Ok(MnemonicLanguage::Japanese),
-            "ko" => Ok(MnemonicLanguage::Korean),
-            "pt" => Ok(MnemonicLanguage::Portuguese),
-            "es" => Ok(MnemonicLanguage::Spanish),
-            _ => Err(Error::InvalidMnemonicLanguage(value)),
+            "en" => MnemonicLanguage::English,
+            "zh-Hans" => MnemonicLanguage::SimplifiedChinese,
+            "zh-Hant" => MnemonicLanguage::TraditionalChinese,
+            "cs" => MnemonicLanguage::Czech,
+            "fr" => MnemonicLanguage::French,
+            "it" => MnemonicLanguage::Italian,
+            "ja" => MnemonicLanguage::Japanese,
+            "ko" => MnemonicLanguage::Korean,
+            "pt" => MnemonicLanguage::Portuguese,
+            "es" => MnemonicLanguage::Spanish,
+            _ => MnemonicLanguage::Other(value),
         }
     }
 }
@@ -200,7 +220,7 @@ impl<C> minicbor::Encode<C> for MnemonicLanguage {
         e: &mut minicbor::Encoder<W>,
         _ctx: &mut C,
     ) -> std::result::Result<(), minicbor::encode::Error<W::Error>> {
-        e.str(&String::from(*self))?;
+        e.str(self.tag())?;
         Ok(())
     }
 }
@@ -210,8 +230,7 @@ impl<'b, C> minicbor::Decode<'b, C> for MnemonicLanguage {
         d: &mut minicbor::Decoder<'b>,
         _ctx: &mut C,
     ) -> std::result::Result<Self, minicbor::decode::Error> {
-        MnemonicLanguage::try_from(d.str()?.to_string())
-            .map_err(|_| minicbor::decode::Error::message("unknown mnemonic language tag"))
+        Ok(MnemonicLanguage::from(d.str()?.to_string()))
     }
 }
 
@@ -228,4 +247,25 @@ mod tests {
     }
 
     test_cbor_roundtrip!(MnemonicLanguage);
+
+    /// An unrecognized BCP 47 tag decodes to `Other` (rather than failing)
+    /// and re-encodes to the same verbatim tag.
+    #[test]
+    fn unknown_tag_round_trips_as_other() {
+        let unknown = MnemonicLanguage::Other("ru".to_string());
+        let bytes = minicbor::to_vec(&unknown).unwrap();
+        // A CBOR text string "ru": 0x62 'r' 'u'.
+        assert_eq!(bytes, [0x62, 0x72, 0x75]);
+        let decoded: MnemonicLanguage = minicbor::decode(&bytes).unwrap();
+        assert_eq!(decoded, unknown);
+        assert_eq!(decoded.name(), "ru");
+    }
+
+    /// A known tag still decodes to its named variant, not `Other`.
+    #[test]
+    fn known_tag_decodes_to_named_variant() {
+        let bytes = minicbor::to_vec(&MnemonicLanguage::Japanese).unwrap();
+        let decoded: MnemonicLanguage = minicbor::decode(&bytes).unwrap();
+        assert_eq!(decoded, MnemonicLanguage::Japanese);
+    }
 }
