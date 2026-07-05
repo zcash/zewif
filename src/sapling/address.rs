@@ -1,4 +1,4 @@
-use crate::Blob;
+use crate::DiversifierIndex;
 use minicbor::{Decode, Encode};
 
 /// A Sapling shielded address (zs-address).
@@ -13,7 +13,7 @@ pub struct Address {
     /// The diversifier index used to derive this address, if known,
     /// stored as 11 bytes in little-endian order.
     #[n(1)]
-    diversifier_index: Option<Blob<11>>,
+    diversifier_index: Option<DiversifierIndex>,
 }
 
 impl Address {
@@ -28,11 +28,11 @@ impl Address {
         &self.address
     }
 
-    pub fn diversifier_index(&self) -> Option<&Blob<11>> {
+    pub fn diversifier_index(&self) -> Option<&DiversifierIndex> {
         self.diversifier_index.as_ref()
     }
 
-    pub fn set_diversifier_index(&mut self, d: Blob<11>) {
+    pub fn set_diversifier_index(&mut self, d: DiversifierIndex) {
         self.diversifier_index = Some(d);
     }
 }
@@ -42,7 +42,7 @@ impl crate::RandomInstance for Address {
     fn random() -> Self {
         Self {
             address: String::random(),
-            diversifier_index: Blob::<11>::opt_random(),
+            diversifier_index: DiversifierIndex::opt_random(),
         }
     }
 }

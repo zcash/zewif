@@ -1,7 +1,8 @@
 use minicbor::{Decode, Encode};
 
 use crate::{
-    Amount, Blob, BlockHeight, Memo, Script, TxId, orchard::OrchardWitness, sapling::SaplingWitness,
+    Amount, BlockHeight, Memo, Nullifier, Script, TxId, orchard::OrchardWitness,
+    sapling::SaplingWitness,
 };
 
 /// A received output within a transaction that belongs to an account.
@@ -140,15 +141,15 @@ impl TransparentOutputData {
 #[cbor(map)]
 pub struct SproutOutputData {
     #[n(0)]
-    nullifier: Option<Blob<32>>,
+    nullifier: Option<Nullifier>,
 }
 
 impl SproutOutputData {
-    pub fn new(nullifier: Option<Blob<32>>) -> Self {
+    pub fn new(nullifier: Option<Nullifier>) -> Self {
         Self { nullifier }
     }
 
-    pub fn nullifier(&self) -> Option<&Blob<32>> {
+    pub fn nullifier(&self) -> Option<&Nullifier> {
         self.nullifier.as_ref()
     }
 }
@@ -160,13 +161,13 @@ pub struct SaplingOutputData {
     #[n(0)]
     tree_data: Option<CommitmentTreeData<SaplingWitness>>,
     #[n(1)]
-    nullifier: Option<Blob<32>>,
+    nullifier: Option<Nullifier>,
 }
 
 impl SaplingOutputData {
     pub fn new(
         tree_data: Option<CommitmentTreeData<SaplingWitness>>,
-        nullifier: Option<Blob<32>>,
+        nullifier: Option<Nullifier>,
     ) -> Self {
         Self {
             tree_data,
@@ -178,7 +179,7 @@ impl SaplingOutputData {
         self.tree_data.as_ref()
     }
 
-    pub fn nullifier(&self) -> Option<&Blob<32>> {
+    pub fn nullifier(&self) -> Option<&Nullifier> {
         self.nullifier.as_ref()
     }
 }
@@ -190,13 +191,13 @@ pub struct OrchardOutputData {
     #[n(0)]
     tree_data: Option<CommitmentTreeData<OrchardWitness>>,
     #[n(1)]
-    nullifier: Option<Blob<32>>,
+    nullifier: Option<Nullifier>,
 }
 
 impl OrchardOutputData {
     pub fn new(
         tree_data: Option<CommitmentTreeData<OrchardWitness>>,
-        nullifier: Option<Blob<32>>,
+        nullifier: Option<Nullifier>,
     ) -> Self {
         Self {
             tree_data,
@@ -208,7 +209,7 @@ impl OrchardOutputData {
         self.tree_data.as_ref()
     }
 
-    pub fn nullifier(&self) -> Option<&Blob<32>> {
+    pub fn nullifier(&self) -> Option<&Nullifier> {
         self.nullifier.as_ref()
     }
 }
@@ -311,7 +312,7 @@ mod tests {
         SaplingOutputData, SproutOutputData, TransparentOutputData, TreePosition,
     };
     use crate::{
-        Amount, Blob, BlockHeight, Memo, Script, TxId, orchard::OrchardWitness,
+        Amount, BlockHeight, Memo, Nullifier, Script, TxId, orchard::OrchardWitness,
         sapling::SaplingWitness,
     };
 
@@ -339,14 +340,14 @@ mod tests {
                     Script::opt_random(),
                     BlockHeight::opt_random(),
                 )),
-                1 => ReceivedOutputPool::Sprout(SproutOutputData::new(Blob::opt_random())),
+                1 => ReceivedOutputPool::Sprout(SproutOutputData::new(Nullifier::opt_random())),
                 2 => ReceivedOutputPool::Sapling(SaplingOutputData::new(
                     CommitmentTreeData::opt_random(),
-                    Blob::opt_random(),
+                    Nullifier::opt_random(),
                 )),
                 _ => ReceivedOutputPool::Orchard(OrchardOutputData::new(
                     CommitmentTreeData::opt_random(),
-                    Blob::opt_random(),
+                    Nullifier::opt_random(),
                 )),
             };
             let mut output = ReceivedOutput::new(output_index, pool);

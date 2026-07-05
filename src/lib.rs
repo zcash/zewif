@@ -45,7 +45,6 @@ mod_use!(address_book);
 mod_use!(amount);
 mod_use!(anchor);
 mod_use!(bip_39_mnemonic);
-mod_use!(blob);
 mod_use!(block_hash);
 mod_use!(block_height);
 mod_use!(chain_state);
@@ -53,6 +52,7 @@ mod_use!(container);
 mod_use!(data);
 mod_use!(error);
 mod_use!(derivation_info);
+mod_use!(diversifier_index);
 mod_use!(extensions);
 mod_use!(incremental_witness);
 mod_use!(key_scope);
@@ -61,6 +61,7 @@ mod_use!(memo);
 mod_use!(mnemonic_language);
 mod_use!(network);
 mod_use!(non_hardened_child_index);
+mod_use!(nullifier);
 mod_use!(protocol_address);
 mod_use!(received_output);
 mod_use!(scan_range);
@@ -82,7 +83,6 @@ mod_use!(zewif_wallet);
 
 use std::fmt::{self, Debug, Display, Formatter};
 
-pub use blob::Blob;
 
 #[doc(hidden)]
 pub struct NoQuotesDebugOption<'a, T>(pub &'a Option<T>);

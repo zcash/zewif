@@ -1,7 +1,7 @@
 /// Creates a new type wrapping a fixed-size byte array with common methods and
 /// trait implementations.
 ///
-/// The `blob!` macro generates a new type that wraps a [`Blob<N>`](crate::Blob)
+/// The `blob!` macro generates a new type that wraps a fixed-size byte array
 /// of the specified size, automatically implementing common methods and traits.
 /// This provides a convenient way to create domain-specific types for
 /// fixed-size binary data with minimal boilerplate.

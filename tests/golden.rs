@@ -11,15 +11,16 @@ use std::collections::BTreeMap;
 
 use zewif::{
     Account, AccountPurpose, AccountViewingKey, Address, AddressBookEntry, Amount, Bip39Mnemonic,
-    Blob, BlockHash, BlockHeight, ChainState, CommitmentTreeData, CompactTxData, Data,
-    DerivationInfo, DerivedKeySource, EncryptedStore, Frontier, FrontierData, IncrementalWitness,
-    KeyScope, KeySource, LegacySeed, Memo, MnemonicLanguage, Network, NonHardenedChildIndex,
-    OrchardOutputData, ProtocolAddress, RawTxData, ReceivedOutput, ReceivedOutputPool,
-    RegtestParams, SaplingExtFvk, SaplingKeyEntry, SaplingOutputData, ScanRange, Script,
-    SecretStore, Secrets, SeedEntry, SeedFingerprint, SeedMaterial, SentOutput, SproutKeyEntry,
-    SproutOutputData, Transaction, TransactionData, TransparentKeyEntry, TransparentOutputData,
-    TreePosition, TxBlockPosition, TxId, UnifiedAddress, UnifiedFullViewingKey, Zewif, ZewifWallet,
-    orchard, sapling, sprout, transparent,
+    BlockHash, BlockHeight, ChainState, CommitmentTreeData, CompactTxData, Data, DerivationInfo,
+    DerivedKeySource, DiversifierIndex, EncryptedStore, ExportId, Frontier, FrontierData,
+    IncrementalWitness, KeyScope, KeySource, LegacySeed, Memo, MerkleNode, MnemonicLanguage,
+    Network, NonHardenedChildIndex, Nullifier, OrchardOutputData, ProtocolAddress, RawTxData,
+    ReceivedOutput, ReceivedOutputPool, RegtestParams, SaplingExtFvk, SaplingKeyEntry,
+    SaplingOutputData, ScanRange, Script, SecretStore, Secrets, SeedEntry, SeedFingerprint,
+    SeedMaterial, SentOutput, SproutKeyEntry, SproutOutputData, Transaction, TransactionData,
+    TransparentKeyEntry, TransparentOutputData, TreePosition, TxBlockPosition, TxId,
+    UnifiedAddress, UnifiedFullViewingKey, Zewif, ZewifWallet, orchard, sapling, sprout,
+    transparent,
 };
 
 const MINIMAL_GOLDEN: &[u8] = include_bytes!("fixtures/v1/minimal.zewif");
@@ -94,8 +95,8 @@ fn ufvk_account() -> Account {
     chain_state.set_sapling_tree(Frontier::Empty);
     chain_state.set_orchard_tree(Frontier::NonEmpty(FrontierData::from_parts(
         1234,
-        Blob::new([0x1D; 32]),
-        vec![Blob::new([0x1E; 32]), Blob::new([0x1F; 32])],
+        MerkleNode::new([0x1D; 32]),
+        vec![MerkleNode::new([0x1E; 32]), MerkleNode::new([0x1F; 32])],
     )));
     account.set_birthday_chain_state(chain_state);
     account.set_recover_until_height(BlockHeight::from_u32(2_400_000));
@@ -111,7 +112,7 @@ fn ufvk_account() -> Account {
     ));
 
     let mut unified = UnifiedAddress::new("u1fixtureunifiedaddress00000000000000000000");
-    unified.set_diversifier_index(Blob::new([0x02; 11]));
+    unified.set_diversifier_index(DiversifierIndex::new([0x02; 11]));
     let mut address = Address::new(ProtocolAddress::Unified(Box::new(unified)));
     address.set_scope(KeyScope::External);
     address.set_exposed_at_height(BlockHeight::from_u32(1_850_000));
@@ -128,7 +129,7 @@ fn ufvk_account() -> Account {
         0,
         ReceivedOutputPool::Sapling(SaplingOutputData::new(
             Some(CommitmentTreeData::Witness(sapling_witness())),
-            Some(Blob::new([0x5A; 32])),
+            Some(Nullifier::new([0x5A; 32])),
         )),
     );
     sapling_received.set_value(Amount::const_from_u64(150_000_000));
@@ -141,7 +142,7 @@ fn ufvk_account() -> Account {
         1,
         ReceivedOutputPool::Orchard(OrchardOutputData::new(
             Some(CommitmentTreeData::Witness(orchard_witness())),
-            Some(Blob::new([0x6A; 32])),
+            Some(Nullifier::new([0x6A; 32])),
         )),
     );
     account.add_relevant_transaction(
@@ -213,7 +214,7 @@ fn sapling_account() -> Account {
     ));
 
     let mut zaddr = sapling::Address::new("zs1fixturesaplingaddress000000000000000000");
-    zaddr.set_diversifier_index(Blob::new([0x00; 11]));
+    zaddr.set_diversifier_index(DiversifierIndex::new([0x00; 11]));
     let mut address = Address::new(ProtocolAddress::Sapling(Box::new(zaddr)));
     address.set_scope(KeyScope::Internal);
     address.set_exposed_at_height(BlockHeight::from_u32(600_000));
@@ -250,7 +251,7 @@ fn sprout_account() -> Account {
 
     let mut sprout_received = ReceivedOutput::new(
         3,
-        ReceivedOutputPool::Sprout(SproutOutputData::new(Some(Blob::new([0x3D; 32])))),
+        ReceivedOutputPool::Sprout(SproutOutputData::new(Some(Nullifier::new([0x3D; 32])))),
     );
     sprout_received.set_value(Amount::const_from_u64(300_000_000));
     account.add_relevant_transaction(TxId::from_bytes(TXID_BARE), vec![sprout_received]);
@@ -499,7 +500,7 @@ fn full_fixture() -> Zewif {
         zewif.add_transaction(tx.txid(), tx);
     }
     zewif.set_secrets(Secrets::Plain(secret_store()));
-    zewif.set_export_id(Blob::new(*b"ZEWIF-fixture-export-id-32bytes!"));
+    zewif.set_export_id(ExportId::new(*b"ZEWIF-fixture-export-id-32bytes!"));
     zewif.set_embedded_schema("zewif = {0: [* wallet], 1: [* transaction]} ; abridged");
     // CBOR "1.2.3"
     zewif.extensions_mut().add(

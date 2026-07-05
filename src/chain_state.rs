@@ -1,6 +1,9 @@
 use minicbor::{Decode, Encode};
 
-use crate::{Blob, BlockHash, BlockHeight};
+use crate::{BlockHash, BlockHeight, blob};
+
+blob!(MerkleNode, 32, "A node hash in a note commitment tree.");
+impl Copy for MerkleNode {}
 
 /// The state of a note commitment tree as of some block (mirrors
 /// incrementalmerkletree's `Frontier`).
@@ -28,15 +31,15 @@ pub struct FrontierData {
     position: u64,
     /// The most recently appended leaf value.
     #[n(1)]
-    leaf: Blob<32>,
+    leaf: MerkleNode,
     /// Hashes of the roots of completed left subtrees, in
     /// leaf-to-root order.
     #[n(2)]
-    ommers: Vec<Blob<32>>,
+    ommers: Vec<MerkleNode>,
 }
 
 impl FrontierData {
-    pub fn from_parts(position: u64, leaf: Blob<32>, ommers: Vec<Blob<32>>) -> Self {
+    pub fn from_parts(position: u64, leaf: MerkleNode, ommers: Vec<MerkleNode>) -> Self {
         Self {
             position,
             leaf,
@@ -48,11 +51,11 @@ impl FrontierData {
         self.position
     }
 
-    pub fn leaf(&self) -> &Blob<32> {
+    pub fn leaf(&self) -> &MerkleNode {
         &self.leaf
     }
 
-    pub fn ommers(&self) -> &[Blob<32>] {
+    pub fn ommers(&self) -> &[MerkleNode] {
         &self.ommers
     }
 }
@@ -120,7 +123,7 @@ impl ChainState {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Blob, BlockHash, BlockHeight, RandomInstance, test_cbor_roundtrip};
+    use crate::{BlockHash, BlockHeight, MerkleNode, RandomInstance, test_cbor_roundtrip};
 
     use super::{ChainState, Frontier, FrontierData};
 
@@ -134,8 +137,8 @@ mod tests {
                 let num_ommers = rng.random_range(0..5usize);
                 Frontier::NonEmpty(FrontierData {
                     position: rng.random_range(0..(1u64 << 40)),
-                    leaf: Blob::random(),
-                    ommers: (0..num_ommers).map(|_| Blob::random()).collect(),
+                    leaf: MerkleNode::random(),
+                    ommers: (0..num_ommers).map(|_| MerkleNode::random()).collect(),
                 })
             }
         }

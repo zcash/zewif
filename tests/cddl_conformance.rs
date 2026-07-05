@@ -18,14 +18,15 @@ use std::path::Path;
 
 use zewif::{
     Account, AccountPurpose, AccountViewingKey, Address, AddressBookEntry, Amount, Bip39Mnemonic,
-    Blob, BlockHash, BlockHeight, ChainState, CommitmentTreeData, CompactTxData, Data,
-    DerivationInfo, DerivedKeySource, Frontier, FrontierData, KeyScope, KeySource, LegacySeed,
-    Memo, MnemonicLanguage, Network, OrchardOutputData, ProtocolAddress, RawTxData, ReceivedOutput,
-    ReceivedOutputPool, RegtestParams, SaplingExtFvk, SaplingKeyEntry, SaplingOutputData,
-    ScanRange, Script, SecretStore, Secrets, SeedEntry, SeedFingerprint, SeedMaterial, SentOutput,
-    SproutKeyEntry, SproutOutputData, Transaction, TransactionData, TransparentKeyEntry,
-    TransparentOutputData, TreePosition, TxBlockPosition, TxId, UnifiedAddress,
-    UnifiedFullViewingKey, Zewif, ZewifWallet, orchard, sapling, sprout, transparent,
+    BlockHash, BlockHeight, ChainState, CommitmentTreeData, CompactTxData, Data, DerivationInfo,
+    DerivedKeySource, DiversifierIndex, ExportId, Frontier, FrontierData, KeyScope, KeySource,
+    LegacySeed, Memo, MerkleNode, MnemonicLanguage, Network, Nullifier, OrchardOutputData,
+    ProtocolAddress, RawTxData, ReceivedOutput, ReceivedOutputPool, RegtestParams, SaplingExtFvk,
+    SaplingKeyEntry, SaplingOutputData, ScanRange, Script, SecretStore, Secrets, SeedEntry,
+    SeedFingerprint, SeedMaterial, SentOutput, SproutKeyEntry, SproutOutputData, Transaction,
+    TransactionData, TransparentKeyEntry, TransparentOutputData, TreePosition, TxBlockPosition,
+    TxId, UnifiedAddress, UnifiedFullViewingKey, Zewif, ZewifWallet, orchard, sapling, sprout,
+    transparent,
 };
 
 fn height(h: u32) -> BlockHeight {
@@ -55,8 +56,8 @@ fn ufvk_account(txid1: TxId, txid2: TxId) -> Account {
     chain_state.set_block_hash(BlockHash::from_bytes([0xBC; 32]));
     chain_state.set_sapling_tree(Frontier::NonEmpty(FrontierData::from_parts(
         1234,
-        Blob::new([0xCC; 32]),
-        vec![Blob::new([0xCD; 32]), Blob::new([0xCE; 32])],
+        MerkleNode::new([0xCC; 32]),
+        vec![MerkleNode::new([0xCD; 32]), MerkleNode::new([0xCE; 32])],
     )));
     chain_state.set_orchard_tree(Frontier::Empty);
     account.set_birthday_chain_state(chain_state);
@@ -95,12 +96,12 @@ fn ufvk_account(txid1: TxId, txid2: TxId) -> Account {
 
     // Sapling, with diversifier index.
     let mut zs = sapling::Address::new("zsconformancesaplingaddress");
-    zs.set_diversifier_index(Blob::new([0x0D; 11]));
+    zs.set_diversifier_index(DiversifierIndex::new([0x0D; 11]));
     account.add_address(Address::new(ProtocolAddress::Sapling(Box::new(zs))));
 
     // Unified, with diversifier index.
     let mut ua = UnifiedAddress::new("u1conformanceunifiedaddress");
-    ua.set_diversifier_index(Blob::new([0x0E; 11]));
+    ua.set_diversifier_index(DiversifierIndex::new([0x0E; 11]));
     let mut addr = Address::new(ProtocolAddress::Unified(Box::new(ua)));
     addr.set_scope(KeyScope::Internal);
     addr.set_exposed_at_height(height(1_800_000));
@@ -124,7 +125,7 @@ fn ufvk_account(txid1: TxId, txid2: TxId) -> Account {
         1,
         ReceivedOutputPool::Sapling(SaplingOutputData::new(
             Some(CommitmentTreeData::Position(TreePosition::new(987_654))),
-            Some(Blob::new([0xAB; 32])),
+            Some(Nullifier::new([0xAB; 32])),
         )),
     );
     sapling_received.set_value(zats(1_2500_0000));
@@ -135,7 +136,7 @@ fn ufvk_account(txid1: TxId, txid2: TxId) -> Account {
         0,
         ReceivedOutputPool::Orchard(OrchardOutputData::new(
             Some(CommitmentTreeData::Position(TreePosition::new(31_337))),
-            Some(Blob::new([0xAC; 32])),
+            Some(Nullifier::new([0xAC; 32])),
         )),
     );
     orchard_received.set_value(zats(7_0000_0000));
@@ -148,7 +149,7 @@ fn ufvk_account(txid1: TxId, txid2: TxId) -> Account {
 
     let sprout_received = ReceivedOutput::new(
         3, // JoinSplit 1, output 1
-        ReceivedOutputPool::Sprout(SproutOutputData::new(Some(Blob::new([0xAD; 32])))),
+        ReceivedOutputPool::Sprout(SproutOutputData::new(Some(Nullifier::new([0xAD; 32])))),
     );
     account.add_relevant_transaction(txid2, vec![sprout_received]);
 
@@ -339,7 +340,7 @@ fn rich_zewif(schema: &str) -> Zewif {
     zewif.add_wallet(regtest_wallet);
     zewif.set_transactions(transactions(txid1, txid2, txid3));
     zewif.set_secrets(Secrets::Plain(secret_store()));
-    zewif.set_export_id(Blob::new([0x1D; 32]));
+    zewif.set_export_id(ExportId::new([0x1D; 32]));
     zewif.set_embedded_schema(schema);
     zewif
         .extensions_mut()

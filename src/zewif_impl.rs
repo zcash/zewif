@@ -1,7 +1,10 @@
 use minicbor::{Decode, Encode};
 use std::collections::BTreeMap;
 
-use crate::{Blob, BlockHash, BlockHeight, Extensions, Secrets};
+use crate::{BlockHash, BlockHeight, Extensions, Secrets, blob};
+
+blob!(ExportId, 32, "A random identifier for a ZeWIF export.");
+impl Copy for ExportId {}
 
 use super::{Transaction, TxId, ZewifWallet};
 
@@ -31,7 +34,7 @@ pub struct Zewif {
     secrets: Option<Secrets>,
     /// Random identifier for this export.
     #[n(5)]
-    export_id: Option<Blob<32>>,
+    export_id: Option<ExportId>,
     #[cbor(n(6), with = "crate::extensions_field", has_nil)]
     extensions: Extensions,
     /// Embedded copy of the CDDL schema for this document's container
@@ -139,11 +142,11 @@ impl Zewif {
     }
 
     /// A random 32-byte identifier for this export, if one has been assigned.
-    pub fn export_id(&self) -> Option<&Blob<32>> {
+    pub fn export_id(&self) -> Option<&ExportId> {
         self.export_id.as_ref()
     }
 
-    pub fn set_export_id(&mut self, export_id: Blob<32>) {
+    pub fn set_export_id(&mut self, export_id: ExportId) {
         self.export_id = Some(export_id);
     }
 
@@ -170,7 +173,7 @@ impl Zewif {
 #[cfg(test)]
 mod tests {
     use crate::{
-        Blob, BlockHash, BlockHeight, Extensions, RandomInstance, Secrets, Transaction, TxId,
+        BlockHash, BlockHeight, ExportId, Extensions, RandomInstance, Secrets, Transaction, TxId,
         test_cbor_roundtrip,
     };
 
@@ -187,7 +190,7 @@ mod tests {
                 export_height: BlockHeight::random(),
                 export_height_block_hash: BlockHash::random(),
                 secrets: Secrets::opt_random(),
-                export_id: Blob::opt_random(),
+                export_id: ExportId::opt_random(),
                 extensions: Extensions::random(),
                 schema: String::opt_random(),
             }
