@@ -17,7 +17,9 @@
 /// A fourth `reversed_hex` argument selects the hash-display convention used
 /// by transaction identifiers and block hashes: `Display`, `Debug`,
 /// `from_hex`, and `to_hex` operate on the byte-reversed (big-endian)
-/// hexadecimal form that RPC methods and block explorers use.
+/// hexadecimal form that RPC methods and block explorers use. Only 32-byte
+/// hash types are canonically encoded in this fashion; the macro rejects
+/// other sizes at compile time.
 ///
 /// # Generated Functionality
 ///
@@ -68,6 +70,11 @@ macro_rules! blob {
     };
 
     ($name:ident, $size:expr, $doc:expr, reversed_hex) => {
+        const _: () = assert!(
+            $size == 32,
+            "the reversed-hex display convention applies only to 32-byte hash types"
+        );
+
         $crate::blob!(@common $name, $size, $doc);
 
         impl std::fmt::Debug for $name {
