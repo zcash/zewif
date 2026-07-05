@@ -5,12 +5,12 @@
 //!
 //! ## Type Hierarchy
 //!
-//! - [`Zewif`]: Root container (wallets + global transaction history + secrets)
-//!   - [`ZewifWallet`]: Wallet (network, accounts, address book)
-//!     - [`Account`]: Viewing key, addresses, transaction references
-//!       - [`Address`]: Protocol-specific address ([`ProtocolAddress`])
-//!   - [`Transaction`]: Transaction metadata and optional raw/compact data
-//!   - [`Secrets`]: Spending key material, storable as opaque ciphertext
+//! - [`Zewif`][]: Root container (wallets + global transaction history + secrets)
+//!   - [`ZewifWallet`][]: Wallet (network, accounts, address book)
+//!     - [`Account`][]: Viewing key, addresses, transaction references
+//!       - [`Address`][]: Protocol-specific address ([`ProtocolAddress`])
+//!   - [`Transaction`][]: Transaction metadata and optional raw/compact data
+//!   - [`Secrets`][]: Spending key material, storable as opaque ciphertext
 //!
 //! ## Serialization
 //!
