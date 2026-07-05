@@ -83,7 +83,6 @@ mod_use!(zewif_wallet);
 
 use std::fmt::{self, Debug, Display, Formatter};
 
-
 #[doc(hidden)]
 pub struct NoQuotesDebugOption<'a, T>(pub &'a Option<T>);
 
