@@ -474,6 +474,7 @@ secret-store = {
   2: [* sapling-key-entry],
   3: [* sprout-key-entry],
   ? 4: extensions,
+  ? 5: [* unified-key-entry],   ; omitted when empty
 }
 
 seed-entry = {
@@ -490,6 +491,18 @@ legacy-seed = bytes32           ; raw pre-mnemonic HD seed bytes
 bip39-mnemonic = {
   0: tstr,                      ; the mnemonic phrase
   ? 1: tstr,                    ; language, BCP 47 tag (e.g. "en")
+}
+
+; An extracted single-account unified spending key, stored under the
+; unified full viewing key it corresponds to. Most wallets hold spend
+; authority as seeds, from which per-account unified spending keys are
+; derived on demand; this entry represents a wallet holding only an
+; extracted spending key. The encoding is the Bech32m string obtained by
+; applying F4Jumble to the key's raw encoding, per the unified raw
+; encodings draft ZIP.
+unified-key-entry = {
+  0: ufvk,
+  1: tstr,                      ; unified spending key text encoding
 }
 
 transparent-key-entry = {

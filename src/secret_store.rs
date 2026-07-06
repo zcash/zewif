@@ -1,7 +1,8 @@
 use minicbor::{Decode, Encode};
 
 use crate::{
-    Data, Extensions, SeedFingerprint, SeedMaterial, sapling::SaplingExtendedSpendingKey,
+    Data, Extensions, SeedFingerprint, SeedMaterial, UnifiedFullViewingKey,
+    sapling::SaplingExtendedSpendingKey,
     sapling::SaplingExtendedFullViewingKey, sprout::SproutSpendingKey,
     transparent::{TransparentPubKey, TransparentSpendingKey},
 };
@@ -98,6 +99,51 @@ pub struct SecretStore {
     sprout_keys: Vec<SproutKeyEntry>,
     #[cbor(n(4), with = "crate::extensions_field", has_nil)]
     extensions: Extensions,
+    /// Extracted single-account unified spending keys. Empty for wallets
+    /// whose spend authority is held as seeds; omitted from the encoding
+    /// when empty.
+    #[cbor(n(5), with = "unified_keys_field", has_nil)]
+    unified_keys: Vec<UnifiedKeyEntry>,
+}
+
+/// Field codec for the unified-key list: the map entry is omitted when the
+/// list is empty, and an absent (or null) entry decodes as empty.
+///
+/// Use as `#[cbor(n(IDX), with = "unified_keys_field", has_nil)]`.
+#[doc(hidden)]
+pub mod unified_keys_field {
+    use minicbor::decode::Error as DecodeError;
+    use minicbor::encode::{Error as EncodeError, Write};
+    use minicbor::{Decoder, Encoder};
+
+    use super::UnifiedKeyEntry;
+
+    pub fn encode<Ctx, W: Write>(
+        v: &Vec<UnifiedKeyEntry>,
+        e: &mut Encoder<W>,
+        ctx: &mut Ctx,
+    ) -> Result<(), EncodeError<W::Error>> {
+        minicbor::Encode::encode(v, e, ctx)
+    }
+
+    pub fn decode<'b, Ctx>(
+        d: &mut Decoder<'b>,
+        ctx: &mut Ctx,
+    ) -> Result<Vec<UnifiedKeyEntry>, DecodeError> {
+        if d.datatype()? == minicbor::data::Type::Null {
+            d.skip()?;
+            return Ok(Vec::new());
+        }
+        minicbor::Decode::decode(d, ctx)
+    }
+
+    pub fn is_nil(v: &[UnifiedKeyEntry]) -> bool {
+        v.is_empty()
+    }
+
+    pub fn nil() -> Option<Vec<UnifiedKeyEntry>> {
+        Some(Vec::new())
+    }
 }
 
 impl SecretStore {
@@ -137,12 +183,58 @@ impl SecretStore {
         self.sprout_keys.push(entry);
     }
 
+    pub fn unified_keys(&self) -> &[UnifiedKeyEntry] {
+        &self.unified_keys
+    }
+
+    pub fn add_unified_key(&mut self, entry: UnifiedKeyEntry) {
+        self.unified_keys.push(entry);
+    }
+
     pub fn extensions(&self) -> &Extensions {
         &self.extensions
     }
 
     pub fn extensions_mut(&mut self) -> &mut Extensions {
         &mut self.extensions
+    }
+}
+
+crate::text_key!(
+    UnifiedSpendingKey,
+    "An extracted single-account unified spending key in the Bech32m text
+encoding obtained by applying F4Jumble to its raw encoding, per the
+unified raw encodings draft ZIP (zcash/zips#660).",
+    "usk1",
+    redacted
+);
+
+/// An extracted single-account unified spending key, stored under the
+/// unified full viewing key it corresponds to.
+///
+/// Most wallets hold spend authority as seeds (from which unified spending
+/// keys are ZIP 32-derived on demand); this entry represents the rarer case
+/// of a wallet holding only an extracted per-account spending key.
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cbor(map)]
+pub struct UnifiedKeyEntry {
+    #[n(0)]
+    fvk: UnifiedFullViewingKey,
+    #[n(1)]
+    key: UnifiedSpendingKey,
+}
+
+impl UnifiedKeyEntry {
+    pub fn new(fvk: UnifiedFullViewingKey, key: UnifiedSpendingKey) -> Self {
+        Self { fvk, key }
+    }
+
+    pub fn fvk(&self) -> &UnifiedFullViewingKey {
+        &self.fvk
+    }
+
+    pub fn spending_key(&self) -> &UnifiedSpendingKey {
+        &self.key
     }
 }
 

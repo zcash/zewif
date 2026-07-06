@@ -467,6 +467,10 @@ fn secret_store() -> SecretStore {
         sapling::SaplingExtendedFullViewingKey::new("zxviews1goldenfixturekeyedfvk"),
         sapling::SaplingExtendedSpendingKey::new("secret-extended-key-main1goldenfixture"),
     ));
+    store.add_unified_key(zewif::UnifiedKeyEntry::new(
+        UnifiedFullViewingKey::new("uview1goldenfixtureextractedaccount"),
+        zewif::UnifiedSpendingKey::new("usk1goldenfixtureextractedkey"),
+    ));
     store.add_sprout_key(SproutKeyEntry::new(
         "zcfixturesproutaddress00000000000000000000000000000000000000000000000000000000000000000000000",
         sprout::SproutSpendingKey::new("SKgoldenfixturesproutspendingkey"),
