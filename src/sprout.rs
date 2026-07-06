@@ -1,31 +1,30 @@
 //! Minimal Sprout protocol types for legacy wallet migration.
 //!
 //! Sprout is the original shielded protocol in Zcash, now deprecated.
-//! These types store Sprout key data in its canonical encodings,
+//! Sprout keys are stored in their canonical Base58Check text encodings,
 //! sufficient for preserving Sprout wallet data during migration from
 //! zcashd.
 
 use minicbor::{Decode, Encode};
 
-use crate::blob;
+use crate::text_key;
 
-blob!(
+text_key!(
     SproutViewingKey,
-    67,
-    "A Sprout viewing key in its canonical encoding: a 3-byte version prefix
-followed by a_pk and sk_enc. It is sufficient to detect incoming Sprout
-notes."
+    "A Sprout viewing key in its canonical Base58Check encoding (mainnet
+strings begin with \"ZiVK\", testnet with \"ZiVt\"). Sufficient to detect
+incoming Sprout notes.",
+    "ZiVK"
 );
-crate::blob_encoding!(SproutViewingKey, bytes);
 
-blob!(
+text_key!(
     SproutSpendingKey,
-    34,
-    "A Sprout spending key in its canonical encoding: a 2-byte network
-version prefix followed by a_sk. The spending key can derive the viewing
-key and payment address."
+    "A Sprout spending key in its canonical Base58Check encoding (mainnet
+strings begin with \"SK\", testnet with \"ST\"). The spending key can derive
+the viewing key and payment address.",
+    "SK",
+    redacted
 );
-crate::blob_encoding!(SproutSpendingKey, redacted);
 
 /// A Sprout shielded address (zc-address).
 ///

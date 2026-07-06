@@ -26,6 +26,7 @@ mod data_macro;
 mod mod_use_macro;
 mod string_macro;
 mod test_roundtrip_macros;
+mod text_key_macro;
 
 // Test utilities
 #[cfg(any(test, feature = "test-dependencies"))]

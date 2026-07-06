@@ -186,7 +186,7 @@ fn ufvk_account(txid1: TxId, txid2: TxId) -> Account {
 /// A view-only account with a standalone Sapling extended full viewing key.
 fn sapling_account() -> Account {
     let mut account = Account::new(AccountViewingKey::SaplingExtFvk(
-        sapling::SaplingExtendedFullViewingKey::new([0x73; 169]),
+        sapling::SaplingExtendedFullViewingKey::new("zxviewtestsapling1conformancefvk"),
     ));
     account.set_name("sapling import");
     account.set_key_source(KeySource::Imported);
@@ -201,7 +201,7 @@ fn sapling_account() -> Account {
 /// A legacy Sprout account.
 fn sprout_account() -> Account {
     let mut account = Account::new(AccountViewingKey::SproutViewingKey(
-        sprout::SproutViewingKey::new([0x64; 67]),
+        sprout::SproutViewingKey::new("ZiVtconformancesproutviewingkey"),
     ));
     account.set_name("sprout legacy");
     account.add_address(Address::new(ProtocolAddress::Sprout(
@@ -288,15 +288,15 @@ fn secret_store() -> SecretStore {
     ));
     store.add_transparent_key(TransparentKeyEntry::new(
         pubkey_bytes(0x02),
-        transparent::TransparentSpendingKey::new([0x77; 32]),
+        transparent::TransparentSpendingKey::new("cVconformancewifprivatekey"),
     ));
     store.add_sapling_key(SaplingKeyEntry::new(
-        sapling::SaplingExtendedFullViewingKey::new([0x73; 169]),
-        sapling::SaplingExtendedSpendingKey::new([0x69; 169]),
+        sapling::SaplingExtendedFullViewingKey::new("zxviewtestsapling1conformancekeyed"),
+        sapling::SaplingExtendedSpendingKey::new("secret-extended-key-test1conformance"),
     ));
     store.add_sprout_key(SproutKeyEntry::new(
         "zcconformancesproutaddress",
-        sprout::SproutSpendingKey::new([0x88; 34]),
+        sprout::SproutSpendingKey::new("STconformancesproutspendingkey"),
     ));
     store
         .extensions_mut()

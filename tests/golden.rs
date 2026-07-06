@@ -198,7 +198,7 @@ fn ufvk_account() -> Account {
 /// without enrichment.
 fn sapling_account() -> Account {
     let mut account = Account::new(AccountViewingKey::SaplingExtFvk(
-        sapling::SaplingExtendedFullViewingKey::new([0x2A; 169]),
+        sapling::SaplingExtendedFullViewingKey::new("zxviews1goldenfixtureviewingkey"),
     ));
     account.set_name("Legacy Sapling");
     account.set_key_source(KeySource::Derived(DerivedKeySource::new(
@@ -234,7 +234,7 @@ fn sapling_account() -> Account {
 /// An imported, view-only Sprout account.
 fn sprout_account() -> Account {
     let mut account = Account::new(AccountViewingKey::SproutViewingKey(
-        sprout::SproutViewingKey::new([0x3C; 67]),
+        sprout::SproutViewingKey::new("ZiVKgoldenfixturesproutviewingkey"),
     ));
     account.set_name("Sprout relic");
     account.set_key_source(KeySource::Imported);
@@ -461,15 +461,15 @@ fn secret_store() -> SecretStore {
     ));
     store.add_transparent_key(TransparentKeyEntry::new(
         transparent::TransparentPubKey::from_bytes(vec![0x02; 33]).expect("valid pubkey"),
-        transparent::TransparentSpendingKey::new([0x4B; 32]),
+        transparent::TransparentSpendingKey::new("L1goldenfixturewifprivatekey"),
     ));
     store.add_sapling_key(SaplingKeyEntry::new(
-        sapling::SaplingExtendedFullViewingKey::new([0x2A; 169]),
-        sapling::SaplingExtendedSpendingKey::new([0x5B; 169]),
+        sapling::SaplingExtendedFullViewingKey::new("zxviews1goldenfixturekeyedfvk"),
+        sapling::SaplingExtendedSpendingKey::new("secret-extended-key-main1goldenfixture"),
     ));
     store.add_sprout_key(SproutKeyEntry::new(
         "zcfixturesproutaddress00000000000000000000000000000000000000000000000000000000000000000000000",
-        sprout::SproutSpendingKey::new([0x6B; 34]),
+        sprout::SproutSpendingKey::new("SKgoldenfixturesproutspendingkey"),
     ));
     // CBOR 100
     store.extensions_mut().add(

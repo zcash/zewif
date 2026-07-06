@@ -68,10 +68,12 @@ account-viewing-key = [0, [ufvk]]              ; ZIP 316 UFVK
                     / [3, []]                  ; transparent address set
                                                ; (legacy zcashd)
 
-ufvk           = tstr           ; canonical ZIP 316 encoding
-sapling-extfvk = bytes169       ; canonical ZIP 32 extended FVK encoding
-sprout-vk      = bytes67        ; canonical encoding: 3-byte version prefix
-                                ; followed by a_pk and sk_enc
+; Viewing keys are carried in their canonical string encodings, which
+; embed a checksum plus type and network discrimination.
+ufvk           = tstr           ; ZIP 316 Bech32m ("uview1...")
+sapling-extfvk = tstr           ; ZIP 32 Bech32 ("zxviews..." /
+                                ; "zxviewtestsapling...")
+sprout-vk      = tstr           ; Base58Check ("ZiVK..." / "ZiVt...")
 
 key-source = [0, [key-source-derived]]
            / [1, []]            ; imported
@@ -324,20 +326,22 @@ bip39-mnemonic = {
 
 transparent-key-entry = {
   0: transparent-pubkey,        ; secp256k1 public key
-  1: bytes32,                   ; private key
+  1: tstr,                      ; private key in WIF Base58Check encoding
+                                ; (version 0x80 mainnet / 0xEF testnet; a
+                                ; trailing 0x01 marks a compressed pubkey)
 }
 
 sapling-key-entry = {
-  0: bytes169,                  ; the canonical encoding of the extended full
-                                ; viewing key this spending key corresponds to
-  1: bytes169,                  ; canonical extended spending key encoding
+  0: sapling-extfvk,            ; the extended full viewing key this
+                                ; spending key corresponds to
+  1: tstr,                      ; extended spending key, ZIP 32 Bech32
+                                ; ("secret-extended-key-main..." / "-test...")
 }
 
 sprout-key-entry = {
   0: tstr,                      ; Sprout address
-  1: bytes34,                   ; Sprout spending key, canonical encoding:
-                                ; 2-byte network version prefix followed by
-                                ; a_sk
+  1: tstr,                      ; Sprout spending key, Base58Check
+                                ; ("SK..." / "ST...")
 }
 
 ; Vendor-namespaced extension data. Vendor identifiers SHOULD be reverse-DNS
@@ -351,9 +355,6 @@ extension-value = bstr
 transparent-pubkey = bstr .size 33 / bstr .size 65
 
 height  = uint .lt 4294967296
-txid     = bytes32
-bytes32  = bstr .size 32
-bytes34  = bstr .size 34
-bytes67  = bstr .size 67
-bytes169 = bstr .size 169
-bytes11  = bstr .size 11
+txid    = bytes32
+bytes32 = bstr .size 32
+bytes11 = bstr .size 11
