@@ -79,7 +79,7 @@ key-source = [0, [key-source-derived]]
            / [1, []]            ; imported
 
 key-source-derived = {
-  0: bytes32,                   ; ZIP 32 seed fingerprint
+  0: seed-fingerprint,
   1: uint,                      ; ZIP 32 account index (hardened)
   ? 2: uint,                    ; zcashd legacy address index (< 2^31); the
                                 ; address-index component of the legacy path
@@ -328,8 +328,7 @@ secret-store = {
 }
 
 seed-entry = {
-  0: bytes32,                   ; ZIP 32 seed fingerprint; referenced by
-                                ; key-source-derived entries
+  0: seed-fingerprint,          ; referenced by key-source-derived entries
   1: seed-material,
 }
 
@@ -382,6 +381,11 @@ extensions = {* tstr => {* tstr => extension-value}}
 
 ; A single embedded CBOR data item (the semantics of RFC 8949 tag 24).
 extension-value = bstr
+
+; A ZIP 32 seed fingerprint in its canonical string encoding: Bech32m with
+; the Human-Readable Part "zip32seedfp" over the 32 fingerprint bytes.
+; Fingerprints are not network-bound.
+seed-fingerprint = tstr
 
 transparent-pubkey = bstr .size 33 / bstr .size 65
 
