@@ -1,25 +1,18 @@
-use crate::blob;
+use crate::text_key;
 
-// A Zcash transparent spending key with derivation information.
-//
-// `TransparentSpendingKey` extends the core spending key functionality by adding the necessary
-// components for hierarchical deterministic (HD) key derivation according to [BIP 44]. This
-// enables the creation of structured wallet hierarchies with parent-child key relationships.
-//
-// [BIP 44]: https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki
-blob!(
+text_key!(
     TransparentSpendingKey,
-    32,
-    "A Zcash transparent private key"
+    "A transparent (secp256k1) private key in its canonical WIF Base58Check
+encoding (version byte 0x80 on mainnet, 0xEF on testnet; a trailing 0x01
+before the checksum marks a compressed public key).",
+    "L",
+    redacted
 );
-crate::blob_encoding!(TransparentSpendingKey, redacted);
-impl Copy for TransparentSpendingKey {}
 
 #[cfg(test)]
 mod tests {
-    use crate::test_cbor_roundtrip;
-
     use super::TransparentSpendingKey;
+    use crate::test_cbor_roundtrip;
 
     test_cbor_roundtrip!(TransparentSpendingKey);
 }
