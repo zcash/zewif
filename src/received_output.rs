@@ -1,8 +1,8 @@
 use minicbor::{Decode, Encode};
 
 use crate::{
-    Amount, BlockHeight, Memo, Nullifier, Script, TxId, orchard::OrchardWitness,
-    sapling::SaplingWitness,
+    Amount, BlockHeight, Memo, Nullifier, Script, TxId, ironwood::IronwoodWitness,
+    orchard::OrchardWitness, sapling::SaplingWitness,
 };
 
 /// A received output within a transaction that belongs to an account.
@@ -94,6 +94,8 @@ pub enum ReceivedOutputPool {
     Sapling(#[n(0)] SaplingOutputData),
     #[n(3)]
     Orchard(#[n(0)] OrchardOutputData),
+    #[n(4)]
+    Ironwood(#[n(0)] IronwoodOutputData),
 }
 
 /// Metadata for a received transparent output.
@@ -214,6 +216,40 @@ impl OrchardOutputData {
     }
 }
 
+/// Metadata for a received Ironwood output.
+///
+/// The Ironwood pool (introduced by the NU6.3 network upgrade) uses the
+/// Orchard protocol — the same circuit and bundle schema — but constitutes
+/// a distinct value pool with its own note commitment tree.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode)]
+#[cbor(map)]
+pub struct IronwoodOutputData {
+    #[n(0)]
+    tree_data: Option<CommitmentTreeData<IronwoodWitness>>,
+    #[n(1)]
+    nullifier: Option<Nullifier>,
+}
+
+impl IronwoodOutputData {
+    pub fn new(
+        tree_data: Option<CommitmentTreeData<IronwoodWitness>>,
+        nullifier: Option<Nullifier>,
+    ) -> Self {
+        Self {
+            tree_data,
+            nullifier,
+        }
+    }
+
+    pub fn tree_data(&self) -> Option<&CommitmentTreeData<IronwoodWitness>> {
+        self.tree_data.as_ref()
+    }
+
+    pub fn nullifier(&self) -> Option<&Nullifier> {
+        self.nullifier.as_ref()
+    }
+}
+
 impl ReceivedOutput {
     pub fn new(output_index: u32, pool: ReceivedOutputPool) -> Self {
         Self {
@@ -247,6 +283,7 @@ impl ReceivedOutput {
         match &self.pool {
             ReceivedOutputPool::Sapling(data) => data.tree_data().map(position_of),
             ReceivedOutputPool::Orchard(data) => data.tree_data().map(position_of),
+            ReceivedOutputPool::Ironwood(data) => data.tree_data().map(position_of),
             _ => None,
         }
     }
@@ -303,17 +340,24 @@ impl NotePosition for OrchardWitness {
     }
 }
 
+impl NotePosition for IronwoodWitness {
+    fn note_position(&self) -> u32 {
+        IronwoodWitness::note_position(self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::test_cbor_roundtrip;
 
     use super::{
-        CommitmentTreeData, OrchardOutputData, ReceivedOutput, ReceivedOutputPool,
-        SaplingOutputData, SproutOutputData, TransparentOutputData, TreePosition,
+        CommitmentTreeData, IronwoodOutputData, OrchardOutputData, ReceivedOutput,
+        ReceivedOutputPool, SaplingOutputData, SproutOutputData, TransparentOutputData,
+        TreePosition,
     };
     use crate::{
-        Amount, BlockHeight, Memo, Nullifier, Script, TxId, orchard::OrchardWitness,
-        sapling::SaplingWitness,
+        Amount, BlockHeight, Memo, Nullifier, Script, TxId, ironwood::IronwoodWitness,
+        orchard::OrchardWitness, sapling::SaplingWitness,
     };
 
     impl<W: crate::RandomInstance> crate::RandomInstance for CommitmentTreeData<W> {
@@ -335,7 +379,7 @@ mod tests {
             use rand::Rng;
             let mut rng = rand::rng();
             let output_index = rng.random_range(0..100u32);
-            let pool = match rng.random_range(0..4u32) {
+            let pool = match rng.random_range(0..5u32) {
                 0 => ReceivedOutputPool::Transparent(TransparentOutputData::new(
                     Script::opt_random(),
                     BlockHeight::opt_random(),
@@ -345,7 +389,11 @@ mod tests {
                     CommitmentTreeData::opt_random(),
                     Nullifier::opt_random(),
                 )),
-                _ => ReceivedOutputPool::Orchard(OrchardOutputData::new(
+                3 => ReceivedOutputPool::Orchard(OrchardOutputData::new(
+                    CommitmentTreeData::opt_random(),
+                    Nullifier::opt_random(),
+                )),
+                _ => ReceivedOutputPool::Ironwood(IronwoodOutputData::new(
                     CommitmentTreeData::opt_random(),
                     Nullifier::opt_random(),
                 )),
@@ -375,5 +423,9 @@ mod tests {
     test_cbor_roundtrip!(
         CommitmentTreeData<OrchardWitness>,
         test_commitment_tree_data_orchard
+    );
+    test_cbor_roundtrip!(
+        CommitmentTreeData<IronwoodWitness>,
+        test_commitment_tree_data_ironwood
     );
 }

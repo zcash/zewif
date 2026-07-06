@@ -81,6 +81,9 @@ pub struct ChainState {
     /// Orchard frontier; `None` = unknown.
     #[n(3)]
     orchard_tree: Option<Frontier>,
+    /// Ironwood note commitment tree frontier; None = unknown.
+    #[n(4)]
+    ironwood_tree: Option<Frontier>,
 }
 
 impl ChainState {
@@ -90,6 +93,7 @@ impl ChainState {
             block_hash: None,
             sapling_tree: None,
             orchard_tree: None,
+            ironwood_tree: None,
         }
     }
 
@@ -119,6 +123,14 @@ impl ChainState {
 
     pub fn set_orchard_tree(&mut self, frontier: Frontier) {
         self.orchard_tree = Some(frontier);
+    }
+
+    pub fn ironwood_tree(&self) -> Option<&Frontier> {
+        self.ironwood_tree.as_ref()
+    }
+
+    pub fn set_ironwood_tree(&mut self, frontier: Frontier) {
+        self.ironwood_tree = Some(frontier);
     }
 }
 
@@ -152,6 +164,7 @@ mod tests {
                 block_hash: BlockHash::opt_random(),
                 sapling_tree: Frontier::opt_random(),
                 orchard_tree: Frontier::opt_random(),
+                ironwood_tree: Frontier::opt_random(),
             }
         }
     }
