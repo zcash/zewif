@@ -12,12 +12,14 @@ internal storage format.
 A ZeWIF export is structured as follows:
 
 - **`Zewif`** — the root container. Holds one or more wallets, a global
-  transaction store (keyed by `TxId`), and export metadata (the block height
-  and hash at the time of export, used by importers for chain verification).
+  transaction store (keyed by `TxId`), export metadata (the block height
+  and hash at the time of export, used by importers for chain verification),
+  and an optional secret store carrying all spending key material.
 
 - **`ZewifWallet`** — a wallet within the export. Carries the network
-  (mainnet/testnet), optional seed material (BIP-39 mnemonic or legacy raw
-  seed), and a list of accounts.
+  (mainnet/testnet/regtest) and a list of accounts. Seed material (BIP-39
+  mnemonic or legacy raw seed) lives in the secret store, referenced by ZIP 32
+  seed fingerprint.
 
 - **`Account`** — a logical grouping of funds. Centered on an
   `AccountViewingKey` that determines what the account can observe on-chain,
@@ -27,7 +29,7 @@ A ZeWIF export is structured as follows:
 
 - **`Address`** — a wallet address wrapping a `ProtocolAddress` (transparent,
   Sprout, Sapling, or unified). Carries no user-facing metadata; labels and
-  contact information belong in attachments.
+  contact information belong in the wallet's address book.
 
 ## Design Principles
 
@@ -54,31 +56,30 @@ inconsistency bugs in export data.
 
 ### Spending key separability
 
-Spending key material is architecturally separate from viewing key material. For
-HD-derived accounts, spending keys are recoverable from the wallet's seed
-material plus the derivation metadata in `KeySource` — no spending keys are
-stored in the account. For legacy zcashd transparent addresses with
-independently-generated keys, each address carries its own private key via its
-`TransparentSpendAuthority`. This separation enables different security
-treatment of spending and viewing data (e.g., separate encryption layers or
-differential access control).
+All secret key material lives in a single secret store at the document root,
+referenced from the public wallet structure by public identifiers: seeds by
+ZIP 32 seed fingerprint, transparent private keys by their public key, Sapling
+spending keys by their full viewing key encoding, and Sprout spending keys by
+their address. For HD-derived accounts, spending keys are recoverable from the
+seed material plus the derivation metadata in `KeySource`. The secret store may
+be carried as opaque ciphertext, and a viewing-only export simply omits it.
 
 ### Address types for cryptographic data only
 
 Address types contain only protocol-level cryptographic and derivation data. No
 user-facing metadata — names, labels, contact information, purpose tags — lives
-on address types. That information belongs in wallet-level attachments, keeping
-the core data model focused on what is needed for cryptographic operations and
-key derivation.
+on address types. That information belongs in the wallet's address book,
+keeping the core data model focused on what is needed for cryptographic
+operations and key derivation.
 
-### Extensibility via attachments
+### Extensibility via extensions
 
 Every major type in ZeWIF (`Zewif`, `ZewifWallet`, `Account`, `Address`,
-`Transaction`) supports an attachments map for wallet-specific metadata. This
-is the extension point for data like address books, private notes on
-transactions, or any other wallet-specific information that doesn't belong in
-the core interchange format. Attachment types will be standardized as specific
-wallet export implementations are built.
+`Transaction`, `AddressBookEntry`) supports a vendor-namespaced extensions map
+for wallet-specific metadata. This is the extension point for data like private
+notes on transactions or any other wallet-specific information that doesn't
+belong in the core interchange format. Re-exporting software must preserve
+extension entries it does not understand.
 
 ## Account Model
 
@@ -104,8 +105,8 @@ The `KeySource` enum records how the account's keys were obtained:
 When zcashd introduced mnemonic seeds in v4.7.0, it created a hybrid situation:
 the legacy account contains both pre-mnemonic randomly-generated addresses and
 HD-derived addresses under account index `0x7FFFFFFF`. ZeWIF models this as an
-account with `AccountViewingKey::TransparentAddressSet` combined with
-`KeySource::Derived { account_index: 0x7FFFFFFF, .. }`. The account-level
+account with `AccountViewingKey::TransparentAddressSet` combined with a
+derived `KeySource` at account index `0x7FFFFFFF`. The account-level
 derivation metadata indicates that additional addresses *can* be derived from
 the seed at that index, while each individual transparent address carries its
 own `TransparentSpendAuthority` distinguishing whether it was HD-derived or
@@ -139,22 +140,29 @@ accounts may have different birthday heights and scanning histories.
 
 ## Serialization Format
 
-ZeWIF uses [Gordian Envelope](https://github.com/BlockchainCommons/BCSwiftSecureComponents)
-over CBOR as its serialization format. An Envelope is a recursive structure
-where a subject (the primary value) is annotated with assertions (predicate-
-object pairs). Each ZeWIF type maps to an Envelope: the type's identity or
-primary key becomes the subject, and its fields become assertions keyed by
-string predicates.
+ZeWIF serializes to deterministic CBOR ([RFC 8949] §4.2 Core Deterministic
+Encoding) under the normative CDDL schema in
+[`docs/draft-nuttycom-zewif.md`](docs/draft-nuttycom-zewif.md). Records are
+CBOR maps with small integer keys (the COSE/CWT convention), enumerations
+without payload are bare unsigned integers, and tagged unions are
+`[variant-id, [body?]]` arrays. Individual types encode and decode via
+[`minicbor`](https://crates.io/crates/minicbor). A complete ZeWIF document is
+written and read with `Zewif::to_bytes` / `Zewif::from_bytes`, which frame the
+CBOR payload with the container header defined by the specification: the ASCII
+magic bytes `ZEWIF` followed by an unsigned 32-bit little-endian format
+version (currently 1). Documents with unrecognized magic bytes or an
+unsupported version are rejected without any payload interpretation.
 
 This structure provides:
 
-- **Self-describing data** — each envelope carries type tags and named
-  predicates, making the format inspectable without a schema.
-- **Unordered assertions** — fields are assertions on a subject, so field order
-  does not affect semantics (ordered collections use explicit index values).
-- **Selective disclosure** — the envelope model supports elision and encryption
-  of individual assertions, enabling spending key separability at the
-  serialization level.
+- **Deterministic encoding** — equal wallet states produce byte-identical
+  documents, making round-trip conformance testing exact.
+- **Forward compatibility** — readers ignore unknown map keys, and field
+  indices, once assigned, are never reused.
+- **Spending/viewing separability** — all secret material lives in one node
+  that can be independently encrypted or omitted entirely.
+
+[RFC 8949]: https://www.rfc-editor.org/rfc/rfc8949
 
 ## Protocol Support
 

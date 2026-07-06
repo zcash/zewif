@@ -1,5 +1,3 @@
-use bc_envelope::prelude::*;
-
 /// A non-hardened index used in hierarchical deterministic wallet derivation paths.
 ///
 /// Non-hardened indices allow public key derivation, enabling watch-only wallets
@@ -47,44 +45,29 @@ impl From<usize> for NonHardenedChildIndex {
     }
 }
 
-impl From<NonHardenedChildIndex> for CBOR {
-    fn from(value: NonHardenedChildIndex) -> Self {
-        CBOR::from(value.0)
+impl<C> minicbor::Encode<C> for NonHardenedChildIndex {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        e.u32(self.0)?;
+        Ok(())
     }
 }
 
-impl From<&NonHardenedChildIndex> for CBOR {
-    fn from(value: &NonHardenedChildIndex) -> Self {
-        CBOR::from(value.0)
-    }
-}
-
-impl TryFrom<CBOR> for NonHardenedChildIndex {
-    type Error = dcbor::Error;
-
-    fn try_from(value: CBOR) -> dcbor::Result<Self> {
-        let position: u32 = value.try_into()?;
-        Ok(NonHardenedChildIndex(position))
-    }
-}
-
-impl From<NonHardenedChildIndex> for Envelope {
-    fn from(value: NonHardenedChildIndex) -> Self {
-        Envelope::new(CBOR::from(value))
-    }
-}
-
-impl TryFrom<Envelope> for NonHardenedChildIndex {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.extract_subject()
+impl<'b, C> minicbor::Decode<'b, C> for NonHardenedChildIndex {
+    fn decode(
+        d: &mut minicbor::Decoder<'b>,
+        _ctx: &mut C,
+    ) -> Result<Self, minicbor::decode::Error> {
+        Ok(NonHardenedChildIndex(d.u32()?))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{test_cbor_roundtrip, test_envelope_roundtrip};
+    use crate::test_cbor_roundtrip;
 
     use super::NonHardenedChildIndex;
 
@@ -95,5 +78,4 @@ mod tests {
     }
 
     test_cbor_roundtrip!(NonHardenedChildIndex);
-    test_envelope_roundtrip!(NonHardenedChildIndex);
 }

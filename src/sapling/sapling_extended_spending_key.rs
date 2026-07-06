@@ -1,18 +1,18 @@
-use crate::{blob, blob_envelope};
+use crate::text_key;
 
-// A hierarchical deterministic (HD) Sapling spending key with derivation information.
-//
-// `SaplingExtendedSpendingKey` extends the core spending key functionality by adding the necessary
-// components for hierarchical deterministic (HD) key derivation according to [ZIP 32]. This
-// enables the creation of structured wallet hierarchies with parent-child key relationships.
-//
-// This key is encoded as defined in https://zips.z.cash/zip-0032#sapling-extended-spending-keys
-//
-// [ZIP 32]: https://zips.z.cash/zip-0032
-blob!(
+text_key!(
     SaplingExtendedSpendingKey,
-    169,
-    "A Sapling Extended Spending Key, encoded as specified in ZIP 32"
+    "A Sapling extended spending key in its canonical Bech32 encoding per
+ZIP 32 (Human-Readable Part \"secret-extended-key-main\" on mainnet,
+\"secret-extended-key-test\" on testnet).",
+    "secret-extended-key-main1",
+    redacted
 );
 
-blob_envelope!(SaplingExtendedSpendingKey);
+#[cfg(test)]
+mod tests {
+    use super::SaplingExtendedSpendingKey;
+    use crate::test_cbor_roundtrip;
+
+    test_cbor_roundtrip!(SaplingExtendedSpendingKey);
+}

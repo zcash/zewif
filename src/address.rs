@@ -1,49 +1,40 @@
-use crate::{BlockHeight, Indexed, KeyScope};
-use bc_envelope::prelude::*;
+use crate::{BlockHeight, Extensions, KeyScope};
+use minicbor::{Decode, Encode};
 
 use super::ProtocolAddress;
 
 /// A wallet address wrapping a protocol-specific address.
 ///
-/// This is the entry in an account's address list. It pairs the
-/// protocol-specific address data with an index for ordered serialization.
-#[derive(Debug, Clone, PartialEq)]
+/// This is the entry in an account's address list, pairing the
+/// protocol-specific address data with wallet metadata about it.
+#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[cbor(map)]
 pub struct Address {
-    index: usize,
+    #[n(0)]
     address: ProtocolAddress,
     /// The role of the address within its account. For HD-derived transparent
     /// addresses this must be consistent with the derivation change component;
     /// it is the authoritative scope for shielded and unified addresses.
+    #[n(1)]
     scope: Option<KeyScope>,
     /// The block height at or around which this address was first exposed to
     /// a user or counterparty. Not recoverable from the chain; importers use
     /// it for gap-limit reasoning (maps to zcash_client_sqlite
     /// addresses.exposed_at_height). None = never exposed — e.g. zcashd
     /// keypool keys, which are pre-generated and not yet handed out.
+    #[n(2)]
     exposed_at_height: Option<BlockHeight>,
-    attachments: Attachments,
+    #[cbor(n(3), with = "crate::extensions_field", has_nil)]
+    extensions: Extensions,
 }
-
-impl Indexed for Address {
-    fn index(&self) -> usize {
-        self.index
-    }
-
-    fn set_index(&mut self, index: usize) {
-        self.index = index;
-    }
-}
-
-bc_envelope::impl_attachable!(Address);
 
 impl Address {
     pub fn new(address: ProtocolAddress) -> Self {
         Self {
-            index: 0,
             address,
             scope: None,
             exposed_at_height: None,
-            attachments: Attachments::new(),
+            extensions: Extensions::new(),
         }
     }
 
@@ -71,60 +62,32 @@ impl Address {
     pub fn set_exposed_at_height(&mut self, height: BlockHeight) {
         self.exposed_at_height = Some(height);
     }
-}
 
-impl From<Address> for Envelope {
-    fn from(value: Address) -> Self {
-        let envelope = Envelope::new(value.index)
-            .add_type("Address")
-            .add_assertion("address", value.address)
-            .add_optional_assertion("scope", value.scope)
-            .add_optional_assertion("exposed_at_height", value.exposed_at_height);
-        value.attachments.add_to_envelope(envelope)
+    pub fn extensions(&self) -> &Extensions {
+        &self.extensions
     }
-}
 
-impl TryFrom<Envelope> for Address {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.check_type("Address")?;
-        let index = envelope.extract_subject()?;
-        let address = envelope.try_object_for_predicate("address")?;
-        let scope = envelope.try_optional_object_for_predicate("scope")?;
-        let exposed_at_height =
-            envelope.extract_optional_object_for_predicate("exposed_at_height")?;
-        let attachments = Attachments::try_from_envelope(&envelope)
-            .map_err(|e| bc_envelope::Error::General(format!("attachments: {}", e)))?;
-        Ok(Address {
-            index,
-            address,
-            scope,
-            exposed_at_height,
-            attachments,
-        })
+    pub fn extensions_mut(&mut self) -> &mut Extensions {
+        &mut self.extensions
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use bc_envelope::Attachments;
-
-    use crate::{BlockHeight, KeyScope, ProtocolAddress, test_envelope_roundtrip};
+    use crate::{BlockHeight, Extensions, KeyScope, ProtocolAddress, test_cbor_roundtrip};
 
     use super::Address;
 
     impl crate::RandomInstance for Address {
         fn random() -> Self {
             Self {
-                index: 0,
                 address: ProtocolAddress::random(),
                 scope: KeyScope::opt_random(),
                 exposed_at_height: BlockHeight::opt_random(),
-                attachments: Attachments::random(),
+                extensions: Extensions::random(),
             }
         }
     }
 
-    test_envelope_roundtrip!(Address);
+    test_cbor_roundtrip!(Address);
 }

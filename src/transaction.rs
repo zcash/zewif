@@ -1,39 +1,81 @@
-use crate::{Amount, BlockHeight, TransactionData, TxBlockPosition, TxId};
-use bc_envelope::prelude::*;
+use crate::{Amount, BlockHeight, Extensions, TransactionData, TxBlockPosition, TxId};
+use minicbor::{Decode, Encode};
 
 /// A Zcash transaction's metadata as tracked by a wallet.
 ///
 /// Stores the transaction identifier along with optional blockchain context
 /// (mining height, block position, fee) and the transaction data itself
 /// (either full raw bytes or compact light-wallet representation).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[cbor(map)]
 pub struct Transaction {
+    #[n(0)]
     txid: TxId,
     /// Full or compact transaction data, if available.
+    #[n(1)]
     tx_data: Option<TransactionData>,
     /// The consensus branch height this transaction targets, if known.
+    #[n(2)]
     target_height: Option<BlockHeight>,
     /// The height at which this transaction was mined, if known.
     /// May become invalid after a rollback near the export height.
+    #[n(3)]
     mined_height: Option<BlockHeight>,
     /// Block hash and index within the block, if known.
+    #[n(4)]
     block_position: Option<TxBlockPosition>,
     /// Transaction fee in zatoshis, if known.
+    #[n(5)]
     fee: Option<Amount>,
     /// The expiry height for this transaction, if known.
+    #[n(6)]
     expiry_height: Option<BlockHeight>,
     /// The wallet-local timestamp associated with this transaction, in seconds
     /// since the Unix epoch: its creation time for wallet-authored transactions,
     /// or the time it was first received or observed (zcashd's nTimeReceived).
+    #[n(7)]
     created_time: Option<i64>,
     /// Whether the user has explicitly marked this transaction as trusted,
     /// making its outputs spendable under the trusted confirmations policy
-    /// of ZIP 315.
+    /// of ZIP 315. Omitted from the encoding when false.
+    #[cbor(n(8), with = "trusted_flag", has_nil)]
     trusted: bool,
-    attachments: Attachments,
+    #[cbor(n(9), with = "crate::extensions_field", has_nil)]
+    extensions: Extensions,
 }
 
-bc_envelope::impl_attachable!(Transaction);
+/// Field codec for the `trusted` flag: the map entry is omitted when false,
+/// and an absent (or null) entry decodes as false.
+mod trusted_flag {
+    use minicbor::decode::Error as DecodeError;
+    use minicbor::encode::{Error as EncodeError, Write};
+    use minicbor::{Decoder, Encoder};
+
+    pub fn encode<Ctx, W: Write>(
+        v: &bool,
+        e: &mut Encoder<W>,
+        _ctx: &mut Ctx,
+    ) -> Result<(), EncodeError<W::Error>> {
+        e.bool(*v)?;
+        Ok(())
+    }
+
+    pub fn decode<'b, Ctx>(d: &mut Decoder<'b>, _ctx: &mut Ctx) -> Result<bool, DecodeError> {
+        if d.datatype()? == minicbor::data::Type::Null {
+            d.skip()?;
+            return Ok(false);
+        }
+        d.bool()
+    }
+
+    pub fn nil() -> Option<bool> {
+        Some(false)
+    }
+
+    pub fn is_nil(v: &bool) -> bool {
+        !*v
+    }
+}
 
 impl Transaction {
     pub fn new(txid: TxId) -> Self {
@@ -47,7 +89,7 @@ impl Transaction {
             expiry_height: None,
             created_time: None,
             trusted: false,
-            attachments: Attachments::new(),
+            extensions: Extensions::new(),
         }
     }
 
@@ -118,70 +160,22 @@ impl Transaction {
     pub fn set_trusted(&mut self, trusted: bool) {
         self.trusted = trusted;
     }
-}
 
-#[rustfmt::skip]
-impl From<Transaction> for Envelope {
-    fn from(value: Transaction) -> Self {
-        let e = Envelope::new(value.txid)
-            .add_type("Transaction")
-            .add_optional_assertion("tx_data", value.tx_data)
-            .add_optional_assertion("target_height", value.target_height)
-            .add_optional_assertion("mined_height", value.mined_height)
-            .add_optional_assertion("block_position", value.block_position)
-            .add_optional_assertion("fee", value.fee)
-            .add_optional_assertion("expiry_height", value.expiry_height)
-            .add_optional_assertion("created_time", value.created_time);
-        let e = if value.trusted {
-            e.add_assertion("trusted", true)
-        } else {
-            e
-        };
-        value.attachments.add_to_envelope(e)
+    pub fn extensions(&self) -> &Extensions {
+        &self.extensions
     }
-}
 
-impl TryFrom<Envelope> for Transaction {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.check_type("Transaction")?;
-        let txid = envelope.extract_subject()?;
-        let tx_data = envelope.try_optional_object_for_predicate("tx_data")?;
-        let target_height = envelope.try_optional_object_for_predicate("target_height")?;
-        let mined_height = envelope.try_optional_object_for_predicate("mined_height")?;
-        let block_position = envelope.try_optional_object_for_predicate("block_position")?;
-        let fee = envelope.try_optional_object_for_predicate("fee")?;
-        let expiry_height = envelope.try_optional_object_for_predicate("expiry_height")?;
-        let created_time = envelope.extract_optional_object_for_predicate("created_time")?;
-        let trusted = envelope
-            .extract_optional_object_for_predicate::<bool>("trusted")?
-            .unwrap_or(false);
-        let attachments = Attachments::try_from_envelope(&envelope)
-            .map_err(|e| bc_envelope::Error::General(format!("attachments: {}", e)))?;
-
-        Ok(Self {
-            txid,
-            tx_data,
-            target_height,
-            mined_height,
-            block_position,
-            fee,
-            expiry_height,
-            created_time,
-            trusted,
-            attachments,
-        })
+    pub fn extensions_mut(&mut self) -> &mut Extensions {
+        &mut self.extensions
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use bc_envelope::Attachments;
-
     use super::Transaction;
     use crate::{
-        Amount, BlockHeight, TransactionData, TxBlockPosition, TxId, test_envelope_roundtrip,
+        Amount, BlockHeight, Extensions, TransactionData, TxBlockPosition, TxId,
+        test_cbor_roundtrip,
     };
 
     impl crate::RandomInstance for Transaction {
@@ -200,10 +194,69 @@ mod tests {
                     .random_bool(0.5)
                     .then(|| rng.random_range(0..=2_000_000_000i64)),
                 trusted: rng.random_bool(0.3),
-                attachments: Attachments::random(),
+                extensions: Extensions::random(),
             }
         }
     }
 
-    test_envelope_roundtrip!(Transaction);
+    test_cbor_roundtrip!(Transaction);
+
+    /// A default (untrusted) flag and empty extensions must be omitted from
+    /// the encoding, so that each state has exactly one encoding.
+    #[test]
+    fn default_fields_are_omitted() {
+        let tx = Transaction::new(TxId::from_bytes([7u8; 32]));
+        let encoded = minicbor::to_vec(&tx).unwrap();
+        // A single-entry map containing only the txid.
+        let mut expected = vec![0xa1, 0x00, 0x58, 0x20];
+        expected.extend_from_slice(&[7u8; 32]);
+        assert_eq!(encoded, expected);
+    }
+
+    /// Readers must ignore map keys not defined in the schema version they
+    /// implement.
+    #[test]
+    fn unknown_fields_are_ignored() {
+        let mut buf = Vec::new();
+        let mut e = minicbor::Encoder::new(&mut buf);
+        e.map(2).unwrap();
+        e.u32(0).unwrap().bytes(&[7u8; 32]).unwrap();
+        e.u32(99).unwrap().str("data from the future").unwrap();
+        let tx: Transaction = minicbor::decode(&buf).unwrap();
+        assert_eq!(tx.txid(), TxId::from_bytes([7u8; 32]));
+    }
+
+    /// Readers should treat a null value in an optional field position as if
+    /// the entry were absent.
+    #[test]
+    fn null_optional_fields_decode_as_absent() {
+        let mut buf = Vec::new();
+        let mut e = minicbor::Encoder::new(&mut buf);
+        e.map(3).unwrap();
+        e.u32(0).unwrap().bytes(&[7u8; 32]).unwrap();
+        e.u32(3).unwrap().null().unwrap();
+        e.u32(8).unwrap().null().unwrap();
+        let tx: Transaction = minicbor::decode(&buf).unwrap();
+        assert_eq!(tx.mined_height(), None);
+        assert!(!tx.is_trusted());
+    }
+
+    /// The `extensions` field codec tolerates an explicit `null` in its map
+    /// position, decoding it as an empty extension set (the reader tolerance
+    /// mandated for absent optional fields). An explicit `false` in the
+    /// `trusted` position likewise decodes as untrusted.
+    #[test]
+    fn explicit_null_extensions_and_false_trusted_decode_as_default() {
+        let mut buf = Vec::new();
+        let mut e = minicbor::Encoder::new(&mut buf);
+        e.map(3).unwrap();
+        e.u32(0).unwrap().bytes(&[7u8; 32]).unwrap();
+        // trusted: an explicit `false` (exercises the non-null branch).
+        e.u32(8).unwrap().bool(false).unwrap();
+        // extensions: an explicit `null` (exercises the null-tolerance branch).
+        e.u32(9).unwrap().null().unwrap();
+        let tx: Transaction = minicbor::decode(&buf).unwrap();
+        assert!(!tx.is_trusted());
+        assert!(tx.extensions().is_empty());
+    }
 }

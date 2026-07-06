@@ -1,27 +1,27 @@
-use crate::{
-    UnifiedAddress,
-    error::Error,
-    sapling, sprout, transparent,
-};
-use bc_envelope::prelude::*;
+use crate::{UnifiedAddress, sapling, sprout, transparent};
+use minicbor::{Decode, Encode};
 
 /// A protocol-specific Zcash address.
 ///
 /// Distinguishes between the address protocols supported in Zcash:
 /// transparent (t-), Sprout (zc-), Sapling (zs-), and unified (u-).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode)]
 pub enum ProtocolAddress {
     /// A transparent address (t-address).
-    Transparent(transparent::Address),
+    #[n(0)]
+    Transparent(#[n(0)] transparent::Address),
 
     /// A Sprout shielded address (zc-address, legacy).
-    Sprout(sprout::SproutAddress),
+    #[n(1)]
+    Sprout(#[n(0)] sprout::SproutAddress),
 
     /// A Sapling shielded address (zs-address).
-    Sapling(Box<sapling::Address>),
+    #[n(2)]
+    Sapling(#[n(0)] Box<sapling::Address>),
 
     /// A unified address (u-address) containing multiple receiver types.
-    Unified(Box<UnifiedAddress>),
+    #[n(3)]
+    Unified(#[n(0)] Box<UnifiedAddress>),
 }
 
 impl ProtocolAddress {
@@ -52,41 +52,10 @@ impl ProtocolAddress {
     }
 }
 
-impl From<ProtocolAddress> for Envelope {
-    fn from(value: ProtocolAddress) -> Self {
-        match value {
-            ProtocolAddress::Transparent(addr) => addr.into(),
-            ProtocolAddress::Sprout(addr) => addr.into(),
-            ProtocolAddress::Sapling(addr) => (*addr).into(),
-            ProtocolAddress::Unified(addr) => (*addr).into(),
-        }
-    }
-}
-
-impl TryFrom<Envelope> for ProtocolAddress {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        if envelope.has_type("TransparentAddress") {
-            Ok(ProtocolAddress::Transparent(envelope.try_into()?))
-        } else if envelope.has_type("SproutAddress") {
-            Ok(ProtocolAddress::Sprout(envelope.try_into()?))
-        } else if envelope.has_type("SaplingAddress") {
-            Ok(ProtocolAddress::Sapling(Box::new(envelope.try_into()?)))
-        } else if envelope.has_type("UnifiedAddress") {
-            Ok(ProtocolAddress::Unified(Box::new(envelope.try_into()?)))
-        } else {
-            Err(Error::InvalidProtocolAddress.into())
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::ProtocolAddress;
-    use crate::{
-        UnifiedAddress, sapling, sprout, test_envelope_roundtrip, transparent,
-    };
+    use crate::{UnifiedAddress, sapling, sprout, test_cbor_roundtrip, transparent};
 
     impl crate::RandomInstance for ProtocolAddress {
         fn random() -> Self {
@@ -101,5 +70,5 @@ mod tests {
         }
     }
 
-    test_envelope_roundtrip!(ProtocolAddress);
+    test_cbor_roundtrip!(ProtocolAddress);
 }

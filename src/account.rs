@@ -1,9 +1,9 @@
-use bc_envelope::prelude::*;
-use std::collections::HashMap;
+use minicbor::{Decode, Encode};
+use std::collections::BTreeMap;
 
 use crate::{
-    AccountViewingKey, Address, BlockHash, BlockHeight, ChainState, Indexed, KeySource,
-    ReceivedOutput, ScanRange, SentOutput, TxId, envelope_indexed_objects_for_predicate,
+    AccountViewingKey, Address, BlockHash, BlockHeight, ChainState, Extensions, KeySource,
+    ReceivedOutput, ScanRange, SentOutput, TxId,
 };
 
 /// A logical grouping of funds, addresses, and transaction history.
@@ -21,28 +21,34 @@ use crate::{
 ///
 /// Due to how mnemonic seeds were introduced in zcashd v4.7.0, a legacy
 /// account may combine `AccountViewingKey::TransparentAddressSet` with
-/// `KeySource::Derived { account_index: 0x7FFFFFFF, .. }`. This means
+/// a derived `KeySource` having account index 0x7FFFFFFF. This means
 /// the account contains both pre-mnemonic randomly-derived addresses
-/// (each carrying its own private key via `TransparentSpendAuthority::Imported`)
-/// and HD-derived addresses (via `TransparentSpendAuthority::Derived`). The
-/// account-level `KeySource::Derived` indicates that additional addresses
-/// *can* be derived from the seed at that account index.
-#[derive(Clone, PartialEq)]
+/// (marked `TransparentSpendAuthority::Imported`, with their private keys,
+/// if exported, in the secret store) and HD-derived addresses (via
+/// `TransparentSpendAuthority::Derived`). The account-level derived
+/// `KeySource` indicates that additional addresses *can* be derived from
+/// the seed at that account index.
+#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[cbor(map)]
 pub struct Account {
-    index: usize,
-
+    /// The account name (may be empty; no uniqueness semantics).
+    #[n(0)]
     name: String,
 
     /// The viewing capability for this account.
+    #[n(1)]
     viewing_key: AccountViewingKey,
 
     /// How the account's keys were obtained.
+    #[n(2)]
     key_source: Option<KeySource>,
 
     /// Minimum block height at which to scan for this account.
+    #[n(3)]
     birthday_height: Option<BlockHeight>,
 
     /// Hash of the birthday block, for chain verification.
+    #[n(4)]
     birthday_block: Option<BlockHash>,
 
     /// Tree state at the end of a block strictly before `birthday_height`
@@ -51,36 +57,45 @@ pub struct Account {
     /// cause the birthday block to be skipped (maps to librustzcash
     /// `AccountBirthday` prior_chain_state). Exporters without chain access
     /// omit it.
+    #[n(5)]
     birthday_chain_state: Option<ChainState>,
 
     /// Height (exclusive) up to which scanning of this account's history
     /// counts as recovery rather than regular scanning; typically the chain
     /// tip at the time recovery was initiated (maps to zcash_client_sqlite
     /// accounts.recover_until_height).
+    #[n(6)]
     recover_until_height: Option<BlockHeight>,
 
     /// The capability of the account in the source wallet; `None` = unknown.
+    #[n(7)]
     purpose: Option<AccountPurpose>,
 
     /// Free-form tag identifying the origin of the account's key material,
     /// e.g. "zcashd_mnemonic" (maps to zcash_client_sqlite
     /// accounts.key_source; named provenance here because zewif uses
     /// `KeySource` for the structured enum).
+    #[n(8)]
     provenance: Option<String>,
 
     /// Block ranges that have been fully scanned for this account.
+    #[n(9)]
     scanned_ranges: Vec<ScanRange>,
 
+    #[n(10)]
     addresses: Vec<Address>,
 
     /// Maps transaction IDs to the received outputs relevant to this account.
-    relevant_transactions: HashMap<TxId, Vec<ReceivedOutput>>,
+    #[n(11)]
+    relevant_transactions: BTreeMap<TxId, Vec<ReceivedOutput>>,
 
     /// Sent output metadata not recoverable from the chain, grouped by
     /// the transaction that created them.
-    sent_outputs: HashMap<TxId, Vec<SentOutput>>,
+    #[n(12)]
+    sent_outputs: BTreeMap<TxId, Vec<SentOutput>>,
 
-    attachments: Attachments,
+    #[cbor(n(13), with = "crate::extensions_field", has_nil)]
+    extensions: Extensions,
 }
 
 /// The capability of an account in the source wallet (maps to
@@ -88,51 +103,18 @@ pub struct Account {
 ///
 /// `ViewOnly` indicates the account was imported without spend authority;
 /// a `None` value of a containing `Option` means the purpose is unknown.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode)]
+#[cbor(index_only)]
 pub enum AccountPurpose {
+    #[n(0)]
     Spending,
+    #[n(1)]
     ViewOnly,
-}
-
-#[rustfmt::skip]
-impl std::fmt::Debug for Account {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Account")
-            .field("index", &self.index)
-            .field("name", &self.name)
-            .field("viewing_key", &self.viewing_key)
-            .field("key_source", &self.key_source)
-            .field("birthday_height", &self.birthday_height)
-            .field("birthday_block", &self.birthday_block)
-            .field("birthday_chain_state", &self.birthday_chain_state)
-            .field("recover_until_height", &self.recover_until_height)
-            .field("purpose", &self.purpose)
-            .field("provenance", &self.provenance)
-            .field("scanned_ranges", &self.scanned_ranges)
-            .field("addresses", &self.addresses)
-            .field("relevant_transactions", &self.relevant_transactions)
-            .field("sent_outputs", &self.sent_outputs)
-            .field("attachments", &self.attachments)
-            .finish()
-    }
-}
-
-bc_envelope::impl_attachable!(Account);
-
-impl Indexed for Account {
-    fn index(&self) -> usize {
-        self.index
-    }
-
-    fn set_index(&mut self, index: usize) {
-        self.index = index;
-    }
 }
 
 impl Account {
     pub fn new(viewing_key: AccountViewingKey) -> Self {
         Self {
-            index: 0,
             name: String::default(),
             viewing_key,
             key_source: None,
@@ -144,9 +126,9 @@ impl Account {
             provenance: None,
             scanned_ranges: Vec::new(),
             addresses: Vec::new(),
-            relevant_transactions: HashMap::new(),
-            sent_outputs: HashMap::new(),
-            attachments: Attachments::new(),
+            relevant_transactions: BTreeMap::new(),
+            sent_outputs: BTreeMap::new(),
+            extensions: Extensions::new(),
         }
     }
 
@@ -230,12 +212,11 @@ impl Account {
         &self.addresses
     }
 
-    pub fn add_address(&mut self, mut address: Address) {
-        address.set_index(self.addresses.len());
+    pub fn add_address(&mut self, address: Address) {
         self.addresses.push(address);
     }
 
-    pub fn relevant_transactions(&self) -> &HashMap<TxId, Vec<ReceivedOutput>> {
+    pub fn relevant_transactions(&self) -> &BTreeMap<TxId, Vec<ReceivedOutput>> {
         &self.relevant_transactions
     }
 
@@ -243,20 +224,24 @@ impl Account {
         self.relevant_transactions.insert(txid, outputs);
     }
 
-    pub fn sent_outputs(&self) -> &HashMap<TxId, Vec<SentOutput>> {
+    pub fn sent_outputs(&self) -> &BTreeMap<TxId, Vec<SentOutput>> {
         &self.sent_outputs
     }
 
-    pub fn add_sent_output(&mut self, txid: TxId, mut output: SentOutput) {
-        let outputs = self.sent_outputs.entry(txid).or_default();
-        output.set_index(outputs.len());
-        outputs.push(output);
+    pub fn add_sent_output(&mut self, txid: TxId, output: SentOutput) {
+        self.sent_outputs.entry(txid).or_default().push(output);
     }
 
     pub fn add_sent_outputs(&mut self, txid: TxId, outputs: Vec<SentOutput>) {
-        for output in outputs {
-            self.add_sent_output(txid, output);
-        }
+        self.sent_outputs.entry(txid).or_default().extend(outputs);
+    }
+
+    pub fn extensions(&self) -> &Extensions {
+        &self.extensions
+    }
+
+    pub fn extensions_mut(&mut self) -> &mut Extensions {
+        &mut self.extensions
     }
 }
 
@@ -266,140 +251,13 @@ impl Default for Account {
     }
 }
 
-#[rustfmt::skip]
-impl From<Account> for Envelope {
-    fn from(value: Account) -> Self {
-        let mut e = Envelope::new(value.index)
-            .add_type("Account")
-            .add_assertion("name", value.name)
-            .add_assertion("viewing_key", value.viewing_key)
-            .add_optional_assertion("key_source", value.key_source)
-            .add_optional_assertion("birthday_height", value.birthday_height)
-            .add_optional_assertion("birthday_block", value.birthday_block)
-            .add_optional_assertion("birthday_chain_state", value.birthday_chain_state)
-            .add_optional_assertion("recover_until_height", value.recover_until_height)
-            .add_optional_assertion("purpose", value.purpose.map(|purpose| match purpose {
-                AccountPurpose::Spending => "spending",
-                AccountPurpose::ViewOnly => "view_only",
-            }))
-            .add_optional_assertion("provenance", value.provenance);
-
-        e = value.scanned_ranges.iter().fold(e, |e, range| e.add_assertion("scanned_range", *range));
-        e = value.addresses.iter().fold(e, |e, address| e.add_assertion("address", address.clone()));
-
-        // Serialize relevant_transactions as a list of (txid, outputs) pairs
-        for (txid, outputs) in &value.relevant_transactions {
-            let tx_envelope = Envelope::new(*txid)
-                .add_type("RelevantTransaction");
-            let tx_envelope = outputs.iter().fold(tx_envelope, |e, output| {
-                e.add_assertion("output", output.clone())
-            });
-            e = e.add_assertion("relevant_transaction", tx_envelope);
-        }
-
-        // Serialize sent_outputs as a list of (txid, outputs) pairs
-        for (txid, outputs) in &value.sent_outputs {
-            let tx_envelope = Envelope::new(*txid)
-                .add_type("SentTransaction");
-            let tx_envelope = outputs.iter().fold(tx_envelope, |e, output| {
-                e.add_assertion("sent_output", output.clone())
-            });
-            e = e.add_assertion("sent_transaction", tx_envelope);
-        }
-
-        value.attachments.add_to_envelope(e)
-    }
-}
-
-impl TryFrom<Envelope> for Account {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.check_type("Account")?;
-        let index = envelope.extract_subject()?;
-        let name = envelope.extract_object_for_predicate("name")?;
-        let viewing_key = envelope.try_object_for_predicate("viewing_key")?;
-        let key_source = envelope.try_optional_object_for_predicate("key_source")?;
-        let birthday_height = envelope.extract_optional_object_for_predicate("birthday_height")?;
-        let birthday_block = envelope.extract_optional_object_for_predicate("birthday_block")?;
-        let birthday_chain_state =
-            envelope.try_optional_object_for_predicate("birthday_chain_state")?;
-        let recover_until_height =
-            envelope.extract_optional_object_for_predicate("recover_until_height")?;
-        let purpose = match envelope.extract_optional_object_for_predicate::<String>("purpose")? {
-            None => None,
-            Some(s) => match s.as_str() {
-                "spending" => Some(AccountPurpose::Spending),
-                "view_only" => Some(AccountPurpose::ViewOnly),
-                other => {
-                    return Err(bc_envelope::Error::General(format!(
-                        "unknown AccountPurpose: {}",
-                        other
-                    )));
-                }
-            },
-        };
-        let provenance = envelope.extract_optional_object_for_predicate("provenance")?;
-
-        let mut scanned_ranges: Vec<ScanRange> =
-            envelope.try_objects_for_predicate("scanned_range")?;
-        scanned_ranges.sort_by_key(|r| r.start());
-
-        let addresses = envelope_indexed_objects_for_predicate(&envelope, "address")
-            .map_err(|e| bc_envelope::Error::General(format!("addresses: {}", e)))?;
-
-        // Deserialize relevant_transactions
-        let mut relevant_transactions = HashMap::new();
-        for tx_env in envelope.objects_for_predicate("relevant_transaction") {
-            tx_env.check_type("RelevantTransaction")?;
-            let txid: TxId = tx_env.extract_subject()?;
-            let mut outputs: Vec<ReceivedOutput> = tx_env.try_objects_for_predicate("output")?;
-            outputs.sort_by_key(|o| o.output_index());
-            relevant_transactions.insert(txid, outputs);
-        }
-
-        // Deserialize sent_outputs
-        let mut sent_outputs = HashMap::new();
-        for tx_env in envelope.objects_for_predicate("sent_transaction") {
-            tx_env.check_type("SentTransaction")?;
-            let txid: TxId = tx_env.extract_subject()?;
-            let mut outputs: Vec<SentOutput> = tx_env.try_objects_for_predicate("sent_output")?;
-            outputs.sort_by_key(|o| o.index());
-            sent_outputs.insert(txid, outputs);
-        }
-
-        let attachments = Attachments::try_from_envelope(&envelope)
-            .map_err(|e| bc_envelope::Error::General(format!("attachments: {}", e)))?;
-
-        Ok(Self {
-            index,
-            name,
-            viewing_key,
-            key_source,
-            birthday_height,
-            birthday_block,
-            birthday_chain_state,
-            recover_until_height,
-            purpose,
-            provenance,
-            scanned_ranges,
-            addresses,
-            relevant_transactions,
-            sent_outputs,
-            attachments,
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
-    use bc_envelope::Attachments;
+    use std::collections::BTreeMap;
 
     use crate::{
-        AccountViewingKey, BlockHash, BlockHeight, ChainState, KeySource, ReceivedOutput,
-        ScanRange, SentOutput, TxId, test_envelope_roundtrip,
+        AccountViewingKey, BlockHash, BlockHeight, ChainState, Extensions, KeySource,
+        ReceivedOutput, ScanRange, SentOutput, TransparentOutputData, TxId, test_cbor_roundtrip,
     };
 
     use super::{Account, AccountPurpose};
@@ -417,12 +275,11 @@ mod tests {
 
     impl crate::RandomInstance for Account {
         fn random() -> Self {
-            use crate::SetIndexes;
             use rand::Rng;
 
             let mut rng = rand::rng();
             let num_txs = rng.random_range(0..3usize);
-            let mut relevant_transactions = HashMap::new();
+            let mut relevant_transactions = BTreeMap::new();
             for _ in 0..num_txs {
                 let txid = TxId::random();
                 let num_outputs = rng.random_range(1..4usize);
@@ -430,10 +287,9 @@ mod tests {
                     .map(|i| {
                         ReceivedOutput::new(
                             i as u32,
-                            crate::ReceivedOutputPool::Transparent {
-                                script: None,
-                                max_observed_unspent_height: None,
-                            },
+                            crate::ReceivedOutputPool::Transparent(TransparentOutputData::new(
+                                None, None,
+                            )),
                         )
                     })
                     .collect();
@@ -441,18 +297,12 @@ mod tests {
             }
 
             let num_sent_txs = rng.random_range(0..3usize);
-            let mut sent_outputs = HashMap::new();
+            let mut sent_outputs = BTreeMap::new();
             for _ in 0..num_sent_txs {
                 let txid = TxId::random();
                 let num_outputs = rng.random_range(1..3usize);
-                let outputs: Vec<SentOutput> = (0..num_outputs)
-                    .enumerate()
-                    .map(|(i, _)| {
-                        let mut o = SentOutput::random();
-                        o.set_index(i);
-                        o
-                    })
-                    .collect();
+                let outputs: Vec<SentOutput> =
+                    (0..num_outputs).map(|_| SentOutput::random()).collect();
                 sent_outputs.insert(txid, outputs);
             }
 
@@ -462,7 +312,6 @@ mod tests {
             scanned_ranges.sort_by_key(|r| r.start());
 
             Self {
-                index: 0,
                 name: String::random(),
                 viewing_key: AccountViewingKey::random(),
                 key_source: KeySource::opt_random(),
@@ -473,13 +322,13 @@ mod tests {
                 purpose: AccountPurpose::opt_random(),
                 provenance: String::opt_random(),
                 scanned_ranges,
-                addresses: Vec::random().set_indexes(),
+                addresses: Vec::random(),
                 relevant_transactions,
                 sent_outputs,
-                attachments: Attachments::random(),
+                extensions: Extensions::random(),
             }
         }
     }
 
-    test_envelope_roundtrip!(Account);
+    test_cbor_roundtrip!(Account);
 }

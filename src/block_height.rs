@@ -1,4 +1,3 @@
-use bc_envelope::prelude::*;
 use std::cmp::{Ord, Ordering};
 use std::fmt;
 use std::ops::{Add, Sub};
@@ -150,54 +149,39 @@ impl Sub<BlockHeight> for BlockHeight {
     }
 }
 
-impl From<BlockHeight> for CBOR {
-    fn from(value: BlockHeight) -> Self {
-        CBOR::from(value.0)
+impl<C> minicbor::Encode<C> for BlockHeight {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        e.u32(self.0)?;
+        Ok(())
     }
 }
 
-impl From<&BlockHeight> for CBOR {
-    fn from(value: &BlockHeight) -> Self {
-        CBOR::from(value.0)
-    }
-}
-
-impl TryFrom<CBOR> for BlockHeight {
-    type Error = dcbor::Error;
-
-    fn try_from(cbor: CBOR) -> dcbor::Result<Self> {
-        Ok(BlockHeight::from(u32::try_from(cbor)?))
-    }
-}
-
-impl From<BlockHeight> for Envelope {
-    fn from(value: BlockHeight) -> Self {
-        Envelope::new(CBOR::from(value))
-    }
-}
-
-impl TryFrom<Envelope> for BlockHeight {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.extract_subject()
+impl<'b, C> minicbor::Decode<'b, C> for BlockHeight {
+    fn decode(
+        d: &mut minicbor::Decoder<'b>,
+        _ctx: &mut C,
+    ) -> Result<Self, minicbor::decode::Error> {
+        Ok(BlockHeight(d.u32()?))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{test_cbor_roundtrip, test_envelope_roundtrip};
+    use crate::test_cbor_roundtrip;
 
     use super::BlockHeight;
 
     impl crate::RandomInstance for BlockHeight {
         fn random() -> Self {
-            let mut rng = bc_rand::thread_rng();
+            let mut rng = rand::rng();
             let value = rand::Rng::random_range(&mut rng, 0..u32::MAX);
             Self(value)
         }
     }
 
     test_cbor_roundtrip!(BlockHeight);
-    test_envelope_roundtrip!(BlockHeight);
 }

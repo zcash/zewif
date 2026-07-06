@@ -1,71 +1,63 @@
-use bc_envelope::prelude::*;
+use minicbor::{Decode, Encode};
 
-use crate::{Blob, BlockHash, BlockHeight};
+use crate::{BlockHash, BlockHeight, blob};
+
+blob!(MerkleNode, 32, "A node hash in a note commitment tree.");
+crate::blob_encoding!(MerkleNode, bytes);
+impl Copy for MerkleNode {}
 
 /// The state of a note commitment tree as of some block (mirrors
 /// incrementalmerkletree's `Frontier`).
 ///
-/// The number of ommers is fully determined by the position; this invariant
-/// is documented, not enforced. An unknown frontier is represented by a
-/// containing `Option` being `None` — `Frontier::Empty` specifically means
-/// an empty tree.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// An unknown frontier is represented by a containing `Option` being `None`
+/// — `Frontier::Empty` specifically means an empty tree.
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum Frontier {
     /// The tree contains no note commitments as of the reference block.
+    #[n(0)]
     Empty,
-    NonEmpty {
-        /// 0-based index of the most recently appended leaf.
-        position: u64,
-        /// The most recently appended leaf value.
-        leaf: Blob<32>,
-        /// Hashes of the roots of completed left subtrees, in
-        /// leaf-to-root order.
-        ommers: Vec<Blob<32>>,
-    },
+    #[n(1)]
+    NonEmpty(#[n(0)] FrontierData),
 }
 
-impl From<Frontier> for Envelope {
-    fn from(value: Frontier) -> Self {
-        match value {
-            Frontier::Empty => Envelope::new("empty")
-                .add_type("Frontier")
-                .add_assertion("variant", "empty"),
-            Frontier::NonEmpty {
-                position,
-                leaf,
-                ommers,
-            } => Envelope::new(position)
-                .add_type("Frontier")
-                .add_assertion("variant", "nonempty")
-                .add_assertion("leaf", leaf)
-                .add_assertion("ommers", ommers),
+/// The contents of a non-empty note commitment tree frontier.
+///
+/// The number of ommers is fully determined by the position; this invariant
+/// is documented, not enforced.
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cbor(map)]
+pub struct FrontierData {
+    /// 0-based index of the most recently appended leaf.
+    #[n(0)]
+    position: u64,
+    /// The most recently appended leaf value.
+    #[n(1)]
+    leaf: MerkleNode,
+    /// Hashes of the roots of completed left subtrees, in
+    /// leaf-to-root order.
+    #[n(2)]
+    ommers: Vec<MerkleNode>,
+}
+
+impl FrontierData {
+    pub fn from_parts(position: u64, leaf: MerkleNode, ommers: Vec<MerkleNode>) -> Self {
+        Self {
+            position,
+            leaf,
+            ommers,
         }
     }
-}
 
-impl TryFrom<Envelope> for Frontier {
-    type Error = bc_envelope::Error;
+    pub fn position(&self) -> u64 {
+        self.position
+    }
 
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.check_type("Frontier")?;
-        let variant: String = envelope.extract_object_for_predicate("variant")?;
-        match variant.as_str() {
-            "empty" => Ok(Frontier::Empty),
-            "nonempty" => {
-                let position: u64 = envelope.extract_subject()?;
-                let leaf: Blob<32> = envelope.extract_object_for_predicate("leaf")?;
-                let ommers: Vec<Blob<32>> = envelope.extract_object_for_predicate("ommers")?;
-                Ok(Frontier::NonEmpty {
-                    position,
-                    leaf,
-                    ommers,
-                })
-            }
-            other => Err(bc_envelope::Error::General(format!(
-                "unknown Frontier variant: {}",
-                other
-            ))),
-        }
+    pub fn leaf(&self) -> &MerkleNode {
+        &self.leaf
+    }
+
+    pub fn ommers(&self) -> &[MerkleNode] {
+        &self.ommers
     }
 }
 
@@ -74,15 +66,20 @@ impl TryFrom<Envelope> for Frontier {
 ///
 /// Maps to zcash_client_backend `ChainState`; frontiers for future shielded
 /// pools will be added as further fields.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cbor(map)]
 pub struct ChainState {
     /// The block whose end-state this describes.
+    #[n(0)]
     height: BlockHeight,
     /// Hash of the block at that height.
+    #[n(1)]
     block_hash: Option<BlockHash>,
     /// Sapling frontier; `None` = unknown.
+    #[n(2)]
     sapling_tree: Option<Frontier>,
     /// Orchard frontier; `None` = unknown.
+    #[n(3)]
     orchard_tree: Option<Frontier>,
 }
 
@@ -125,39 +122,11 @@ impl ChainState {
     }
 }
 
-impl From<ChainState> for Envelope {
-    fn from(value: ChainState) -> Self {
-        Envelope::new(value.height)
-            .add_type("ChainState")
-            .add_optional_assertion("block_hash", value.block_hash)
-            .add_optional_assertion("sapling_tree", value.sapling_tree)
-            .add_optional_assertion("orchard_tree", value.orchard_tree)
-    }
-}
-
-impl TryFrom<Envelope> for ChainState {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.check_type("ChainState")?;
-        let height = envelope.extract_subject()?;
-        let block_hash = envelope.extract_optional_object_for_predicate("block_hash")?;
-        let sapling_tree = envelope.try_optional_object_for_predicate("sapling_tree")?;
-        let orchard_tree = envelope.try_optional_object_for_predicate("orchard_tree")?;
-        Ok(Self {
-            height,
-            block_hash,
-            sapling_tree,
-            orchard_tree,
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::{Blob, BlockHash, BlockHeight, RandomInstance, test_envelope_roundtrip};
+    use crate::{BlockHash, BlockHeight, MerkleNode, RandomInstance, test_cbor_roundtrip};
 
-    use super::{ChainState, Frontier};
+    use super::{ChainState, Frontier, FrontierData};
 
     impl RandomInstance for Frontier {
         fn random() -> Self {
@@ -167,11 +136,11 @@ mod tests {
                 Frontier::Empty
             } else {
                 let num_ommers = rng.random_range(0..5usize);
-                Frontier::NonEmpty {
+                Frontier::NonEmpty(FrontierData {
                     position: rng.random_range(0..(1u64 << 40)),
-                    leaf: Blob::random(),
-                    ommers: (0..num_ommers).map(|_| Blob::random()).collect(),
-                }
+                    leaf: MerkleNode::random(),
+                    ommers: (0..num_ommers).map(|_| MerkleNode::random()).collect(),
+                })
             }
         }
     }
@@ -187,6 +156,6 @@ mod tests {
         }
     }
 
-    test_envelope_roundtrip!(Frontier, 20, false, test_frontier_envelope);
-    test_envelope_roundtrip!(ChainState, 20, false, test_chain_state_envelope);
+    test_cbor_roundtrip!(Frontier, test_frontier_cbor);
+    test_cbor_roundtrip!(ChainState, test_chain_state_cbor);
 }

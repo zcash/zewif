@@ -1,90 +1,39 @@
 //! Minimal Sprout protocol types for legacy wallet migration.
 //!
 //! Sprout is the original shielded protocol in Zcash, now deprecated.
-//! These types store Sprout key data as opaque bytes, sufficient for
-//! preserving Sprout wallet data during migration from zcashd.
+//! Sprout keys are stored in their canonical Base58Check text encodings,
+//! sufficient for preserving Sprout wallet data during migration from
+//! zcashd.
 
-use bc_envelope::prelude::*;
+use minicbor::{Decode, Encode};
 
-use crate::Data;
+use crate::text_key;
 
-/// A Sprout viewing key in its canonical serialized encoding (64 bytes).
-///
-/// In zcashd this is `(a_pk, sk_enc)` — the paying key and the
-/// receiving key. It is sufficient to detect incoming Sprout notes.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SproutViewingKey {
-    data: Data,
-}
+text_key!(
+    SproutViewingKey,
+    "A Sprout viewing key in its canonical Base58Check encoding (mainnet
+strings begin with \"ZiVK\", testnet with \"ZiVt\"). Sufficient to detect
+incoming Sprout notes.",
+    "ZiVK"
+);
 
-impl SproutViewingKey {
-    pub fn new(data: Data) -> Self {
-        Self { data }
-    }
-
-    pub fn data(&self) -> &Data {
-        &self.data
-    }
-}
-
-impl From<SproutViewingKey> for Envelope {
-    fn from(value: SproutViewingKey) -> Self {
-        Envelope::new(value.data).add_type("SproutViewingKey")
-    }
-}
-
-impl TryFrom<Envelope> for SproutViewingKey {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.check_type("SproutViewingKey")?;
-        let data: Data = envelope.extract_subject()?;
-        Ok(Self { data })
-    }
-}
-
-/// A Sprout spending key in its canonical encoding (32 bytes).
-///
-/// The spending key can derive the viewing key and payment address.
-/// Stored separately from viewing data to support spending key
-/// separability.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SproutSpendingKey {
-    data: Data,
-}
-
-impl SproutSpendingKey {
-    pub fn new(data: Data) -> Self {
-        Self { data }
-    }
-
-    pub fn data(&self) -> &Data {
-        &self.data
-    }
-}
-
-impl From<SproutSpendingKey> for Envelope {
-    fn from(value: SproutSpendingKey) -> Self {
-        Envelope::new(value.data).add_type("SproutSpendingKey")
-    }
-}
-
-impl TryFrom<Envelope> for SproutSpendingKey {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.check_type("SproutSpendingKey")?;
-        let data: Data = envelope.extract_subject()?;
-        Ok(Self { data })
-    }
-}
+text_key!(
+    SproutSpendingKey,
+    "A Sprout spending key in its canonical Base58Check encoding (mainnet
+strings begin with \"SK\", testnet with \"ST\"). The spending key can derive
+the viewing key and payment address.",
+    "SK",
+    redacted
+);
 
 /// A Sprout shielded address (zc-address).
 ///
 /// Stored as the address string. No internal structure is parsed;
 /// the importing wallet either understands Sprout or it doesn't.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cbor(map)]
 pub struct SproutAddress {
+    #[n(0)]
     address: String,
 }
 
@@ -100,36 +49,6 @@ impl SproutAddress {
     }
 }
 
-impl From<SproutAddress> for Envelope {
-    fn from(value: SproutAddress) -> Self {
-        Envelope::new(value.address).add_type("SproutAddress")
-    }
-}
-
-impl TryFrom<Envelope> for SproutAddress {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.check_type("SproutAddress")?;
-        let address: String = envelope.extract_subject()?;
-        Ok(Self { address })
-    }
-}
-
-#[cfg(test)]
-impl crate::RandomInstance for SproutViewingKey {
-    fn random() -> Self {
-        SproutViewingKey::new(Data::random())
-    }
-}
-
-#[cfg(test)]
-impl crate::RandomInstance for SproutSpendingKey {
-    fn random() -> Self {
-        SproutSpendingKey::new(Data::random())
-    }
-}
-
 #[cfg(test)]
 impl crate::RandomInstance for SproutAddress {
     fn random() -> Self {
@@ -138,22 +57,11 @@ impl crate::RandomInstance for SproutAddress {
 }
 
 #[cfg(test)]
-mod viewing_key_tests {
-    use super::SproutViewingKey;
-    use crate::test_envelope_roundtrip;
-    test_envelope_roundtrip!(SproutViewingKey);
-}
+mod tests {
+    use super::{SproutAddress, SproutSpendingKey, SproutViewingKey};
+    use crate::test_cbor_roundtrip;
 
-#[cfg(test)]
-mod spending_key_tests {
-    use super::SproutSpendingKey;
-    use crate::test_envelope_roundtrip;
-    test_envelope_roundtrip!(SproutSpendingKey);
-}
-
-#[cfg(test)]
-mod address_tests {
-    use super::SproutAddress;
-    use crate::test_envelope_roundtrip;
-    test_envelope_roundtrip!(SproutAddress);
+    test_cbor_roundtrip!(SproutViewingKey);
+    test_cbor_roundtrip!(SproutSpendingKey, test_sprout_spending_key);
+    test_cbor_roundtrip!(SproutAddress, test_sprout_address);
 }

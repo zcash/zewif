@@ -1,7 +1,7 @@
 /// Creates a new type wrapping a fixed-size byte array with common methods and
 /// trait implementations.
 ///
-/// The `blob!` macro generates a new type that wraps a [`Blob<N>`](crate::Blob)
+/// The `blob!` macro generates a new type that wraps a fixed-size byte array
 /// of the specified size, automatically implementing common methods and traits.
 /// This provides a convenient way to create domain-specific types for
 /// fixed-size binary data with minimal boilerplate.
@@ -11,27 +11,34 @@
 /// ```
 /// # use zewif::blob;
 /// #
-/// blob!(TxId, 32, "A transaction identifier as a 32-byte hash");
+/// blob!(ExampleHash, 32, "An example 32-byte hash type");
 /// ```
+///
+/// Textual encoding is provided separately by the [`blob_encoding!`] macro,
+/// which every `blob!` type pairs with to declare its canonical encoding:
+/// `bytes` for types that are definitionally byte content (no hex API is
+/// generated; `Debug` output shows the bytes in hex for diagnostics only),
+/// or `reversed_hex` for the hash-display convention used by transaction
+/// identifiers and block hashes — the only zewif types with a canonical
+/// hexadecimal encoding.
 ///
 /// # Generated Functionality
 ///
 /// The generated type includes methods for creation, conversion, and
-/// inspection, as well as implementations for common traits like `Parse`,
-/// `Debug`, `Clone`, and various conversion traits to and from byte
-/// collections.
-///
-/// The macro adds type safety and domain-specific semantics to otherwise
-/// generic byte array data, particularly for cryptographic values used in the
-/// Zcash protocol.
+/// inspection, hex parsing and formatting, ordering/equality/hash traits,
+/// byte-collection conversions, and the ZeWIF CBOR codec (a byte string of
+/// exactly the declared length).
 #[macro_export]
 macro_rules! blob {
     ($name:ident, $size:expr, $doc:expr) => {
         #[doc = $doc]
-        #[derive(Clone)]
+        #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct $name([u8; $size]);
 
         impl $name {
+            /// The length of this type's byte content.
+            pub const SIZE: usize = $size;
+
             /// Creates a new instance from a fixed-size byte array.
             ///
             /// This is the primary constructor when you have an exact-sized
@@ -87,59 +94,23 @@ macro_rules! blob {
             pub fn from_vec(data: Vec<u8>) -> Result<Self, std::array::TryFromSliceError> {
                 Ok(Self(<[u8; $size]>::try_from(&data[..])?))
             }
-
-            /// Parses an instance from a hex string.
-            pub fn from_hex(hex: &str) -> $crate::Result<Self> {
-                let data = hex::decode(hex)?;
-                let data_len = data.len();
-                Self::from_vec(data).map_err(|_| $crate::Error::HexLengthMismatch {
-                    expected: $size,
-                    actual: data_len,
-                })
-            }
-
-            /// Parses an instance from a hex string in reversed byte order,
-            /// such as is used for transaction identifiers and block
-            /// hashes.
-            pub fn from_reversed_hex(hex: &str) -> $crate::Result<Self> {
-                let mut data = hex::decode(hex)?;
-                let data_len = data.len();
-                data.reverse();
-                Self::from_vec(data).map_err(|_| $crate::Error::HexLengthMismatch {
-                    expected: $size,
-                    actual: data_len,
-                })
-            }
-
-            /// Formats the bytes of this object as a hex string.
-            pub fn to_hex(&self) -> String {
-                hex::encode(self.0)
-            }
-        }
-
-        impl PartialEq for $name {
-            fn eq(&self, other: &Self) -> bool {
-                self.0.eq(&other.0)
-            }
-        }
-
-        impl Eq for $name {}
-
-        impl std::hash::Hash for $name {
-            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-                self.0.hash(state)
-            }
-        }
-
-        impl std::fmt::Debug for $name {
-            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(f, "{}({})", stringify!($name), hex::encode(self.0))
-            }
         }
 
         impl AsRef<[u8]> for $name {
             fn as_ref(&self) -> &[u8] {
                 &self.0[..]
+            }
+        }
+
+        impl AsRef<[u8; $size]> for $name {
+            fn as_ref(&self) -> &[u8; $size] {
+                &self.0
+            }
+        }
+
+        impl From<$name> for [u8; $size] {
+            fn from(blob: $name) -> [u8; $size] {
+                blob.0
             }
         }
 
@@ -167,28 +138,29 @@ macro_rules! blob {
             }
         }
 
-        impl From<$name> for bc_envelope::prelude::CBOR {
-            fn from(data: $name) -> Self {
-                bc_envelope::prelude::CBOR::to_byte_string(data.0)
+        impl<C> minicbor::Encode<C> for $name {
+            fn encode<W: minicbor::encode::Write>(
+                &self,
+                e: &mut minicbor::Encoder<W>,
+                _ctx: &mut C,
+            ) -> Result<(), minicbor::encode::Error<W::Error>> {
+                e.bytes(self.as_slice())?;
+                Ok(())
             }
         }
 
-        impl From<&$name> for bc_envelope::prelude::CBOR {
-            fn from(data: &$name) -> Self {
-                bc_envelope::prelude::CBOR::to_byte_string(data.0)
-            }
-        }
-
-        impl TryFrom<bc_envelope::prelude::CBOR> for $name {
-            type Error = dcbor::Error;
-
-            fn try_from(cbor: bc_envelope::prelude::CBOR) -> Result<Self, Self::Error> {
-                let bytes = cbor.try_into_byte_string()?;
-                Self::from_slice(&bytes).map_err(|_| {
-                    dcbor::Error::msg(format!(
-                        "slice length invalid; expected {} bytes, got {}",
-                        $size,
-                        bytes.len()
+        impl<'b, C> minicbor::Decode<'b, C> for $name {
+            fn decode(
+                d: &mut minicbor::Decoder<'b>,
+                _ctx: &mut C,
+            ) -> Result<Self, minicbor::decode::Error> {
+                let bytes = d.bytes()?;
+                Self::from_slice(bytes).map_err(|_| {
+                    minicbor::decode::Error::message(concat!(
+                        "expected a byte string of length ",
+                        stringify!($size),
+                        " for ",
+                        stringify!($name)
                     ))
                 })
             }
@@ -197,8 +169,81 @@ macro_rules! blob {
         #[cfg(test)]
         impl $crate::RandomInstance for $name {
             fn random() -> Self {
-                let mut rng = bc_rand::thread_rng();
-                Self(bc_rand::rng_random_array(&mut rng))
+                Self(rand::random())
+            }
+        }
+    };
+}
+
+/// Declares the canonical encoding of a [`blob!`] type, generating its
+/// `Debug` implementation and (where one exists) its textual encoding.
+///
+/// Every `blob!` type pairs with exactly one `blob_encoding!` invocation:
+///
+/// - `bytes`: the type is definitionally byte content (or its canonical
+///   text encoding is defined elsewhere and not stored by zewif, as for
+///   incoming viewing keys). No parsing or formatting API is generated;
+///   `Debug` output shows the bytes in hexadecimal for diagnostics only.
+/// - `redacted`: the type is secret material; `Debug` output elides the
+///   content entirely.
+/// - `reversed_hex`: `Display`, `Debug`, `from_hex`, and `to_hex` use the
+///   byte-reversed (big-endian) hexadecimal form that RPC methods and block
+///   explorers display. Only transaction identifiers and block hashes are
+///   canonically encoded in this fashion.
+#[macro_export]
+macro_rules! blob_encoding {
+    ($name:ident, bytes) => {
+        impl std::fmt::Debug for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                // Diagnostic form only: these bytes have no canonical
+                // textual encoding within zewif.
+                write!(f, "{}({})", stringify!($name), hex::encode(self.as_slice()))
+            }
+        }
+    };
+
+    ($name:ident, redacted) => {
+        impl std::fmt::Debug for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "{}(<elided>)", stringify!($name))
+            }
+        }
+    };
+
+    ($name:ident, reversed_hex) => {
+        impl std::fmt::Debug for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "{}({})", stringify!($name), self)
+            }
+        }
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                // The byte-reversed hex string is what RPC methods and block
+                // explorers display.
+                let mut data = *self.as_bytes();
+                data.reverse();
+                f.write_str(&hex::encode(data))
+            }
+        }
+
+        impl $name {
+            /// Parses an instance from its canonically-displayed
+            /// (byte-reversed) hexadecimal form.
+            pub fn from_hex(hex: &str) -> $crate::Result<Self> {
+                let mut data = hex::decode(hex)?;
+                let data_len = data.len();
+                data.reverse();
+                Self::from_vec(data).map_err(|_| $crate::Error::HexLengthMismatch {
+                    expected: Self::SIZE,
+                    actual: data_len,
+                })
+            }
+
+            /// Formats this value in its canonically-displayed
+            /// (byte-reversed) hexadecimal form.
+            pub fn to_hex(&self) -> String {
+                self.to_string()
             }
         }
     };

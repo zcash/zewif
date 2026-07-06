@@ -1,61 +1,17 @@
-use dcbor::prelude::CBORError;
-use std::{
-    array::TryFromSliceError, borrow::Cow, convert::Infallible,
-    error::Error as StdError,
-};
+use std::{array::TryFromSliceError, convert::Infallible};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    // Catch-all string context that wraps any source error
-    #[error("{message}")]
-    Context {
-        message: Cow<'static, str>,
-        #[source]
-        source: Box<dyn StdError + Send + Sync>,
-    },
-
     // Validation errors
-    #[error("Invalid network identifier: {0}")]
-    InvalidNetwork(String),
-
     #[error("Amount underflow: {0}")]
     AmountUnderflow(u64),
 
     #[error("Amount overflow: {0}")]
     AmountOverflow(u64),
 
-    #[error("Invalid SeedMaterial envelope")]
-    InvalidSeedMaterial,
-
-    #[error("Envelope is not a Zewif envelope")]
-    NotZewifEnvelope,
-
-    #[error(
-        "Cannot compress a Zewif that has already been compressed or encrypted"
-    )]
-    AlreadyCompressedOrEncrypted,
-
-    #[error("Cannot uncompress a Zewif that has not been compressed")]
-    NotCompressed,
-
-    #[error("Cannot encrypt a Zewif that has already been encrypted")]
-    AlreadyEncrypted,
-
-    #[error("Cannot decrypt a Zewif that has not been encrypted")]
-    NotEncrypted,
-
     #[error("Invalid language value: {0}")]
     InvalidLanguage(String),
-
-    #[error("Invalid MnemonicLanguage string: {0}")]
-    InvalidMnemonicLanguage(String),
-
-    #[error("Invalid TransparentSpendAuthority envelope")]
-    InvalidTransparentSpendAuthority,
-
-    #[error("Invalid ProtocolAddress type")]
-    InvalidProtocolAddress,
 
     #[error("Hex parsing error: expected {expected} bytes, got {actual}")]
     HexLengthMismatch { expected: usize, actual: usize },
@@ -63,37 +19,61 @@ pub enum Error {
     #[error("Invalid hex string: {0}")]
     InvalidHexString(#[from] hex::FromHexError),
 
-    #[error("Envelope error: {0}")]
-    EnvelopeError(#[from] bc_envelope::Error),
+    /// A transparent public key must be 33 (compressed) or 65
+    /// (uncompressed) bytes; carries the rejected length.
+    #[error("Invalid transparent public key length: {0}")]
+    InvalidTransparentPubKeyLength(usize),
 
     #[error("Slice conversion error: {0}")]
     TryFromSliceError(#[from] TryFromSliceError),
 
-    #[error("CBOR error: {0}")]
-    CBORError(#[from] CBORError),
+    // Container format errors
+    /// The document does not begin with the ZeWIF magic bytes.
+    #[error("Not a ZeWIF document: bad magic bytes")]
+    BadMagic,
+
+    /// The document ends before the end of the fixed-size container header;
+    /// carries the number of bytes present.
+    #[error("Truncated ZeWIF container header: {0} bytes")]
+    TruncatedHeader(usize),
+
+    /// The document declares a container version that this crate does not
+    /// implement; carries the declared version.
+    #[error("Unsupported ZeWIF container version: {0}")]
+    UnsupportedVersion(u32),
+
+    /// The payload is a well-formed CBOR item followed by additional bytes;
+    /// the payload must be a single CBOR data item. Carries the number of
+    /// unconsumed trailing bytes.
+    #[error("Trailing data after ZeWIF payload: {0} bytes")]
+    TrailingData(usize),
+
+    /// The CBOR payload could not be decoded.
+    #[error("CBOR decode error: {0}")]
+    CborDecode(#[from] minicbor::decode::Error),
+
+    /// The CBOR payload could not be encoded.
+    #[error("CBOR encode error: {0}")]
+    CborEncode(#[from] minicbor::encode::Error<Infallible>),
+    /// Encryption of a secret store to the requested age recipients failed.
+    #[cfg(feature = "encryption")]
+    #[error("Secret store encryption failed: {0}")]
+    SecretStoreEncryption(#[from] age::EncryptError),
+
+    /// Decryption of an encrypted secret store failed.
+    #[cfg(feature = "encryption")]
+    #[error("Secret store decryption failed: {0}")]
+    SecretStoreDecryption(#[from] age::DecryptError),
+
+    /// The decrypted plaintext was not the CBOR encoding of a secret store.
+    #[cfg(feature = "encryption")]
+    #[error("Secret store decoding failed: {0}")]
+    SecretStoreDecode(#[source] minicbor::decode::Error),
 }
 
 impl From<Infallible> for Error {
     fn from(e: Infallible) -> Self {
         match e {}
-    }
-}
-
-impl From<Error> for CBORError {
-    fn from(e: Error) -> Self {
-        match e {
-            Error::CBORError(cbor_err) => cbor_err,
-            other => CBORError::msg(other.to_string()),
-        }
-    }
-}
-
-impl From<Error> for bc_envelope::Error {
-    fn from(e: Error) -> Self {
-        match e {
-            Error::EnvelopeError(envelope_err) => envelope_err,
-            other => bc_envelope::Error::msg(other.to_string()),
-        }
     }
 }
 

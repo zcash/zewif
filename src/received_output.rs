@@ -1,7 +1,8 @@
-use bc_envelope::prelude::*;
+use minicbor::{Decode, Encode};
 
 use crate::{
-    Amount, Blob, BlockHeight, Memo, Script, TxId, orchard::OrchardWitness, sapling::SaplingWitness,
+    Amount, BlockHeight, Memo, Nullifier, Script, TxId, orchard::OrchardWitness,
+    sapling::SaplingWitness,
 };
 
 /// A received output within a transaction that belongs to an account.
@@ -14,75 +15,66 @@ use crate::{
 /// account's viewing key, so exporters SHOULD include them when the raw
 /// transaction data is absent. Where both are present, the raw transaction
 /// is authoritative.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cbor(map)]
 pub struct ReceivedOutput {
     /// Index of the output within the appropriate pool's output list
     /// in the transaction.
+    #[n(0)]
     output_index: u32,
     /// Which pool the output belongs to, with pool-specific metadata.
+    #[n(1)]
     pool: ReceivedOutputPool,
     /// The value of the output in zatoshis, if known.
+    #[n(2)]
     value: Option<Amount>,
     /// Memo attached to a shielded output, if any.
+    #[n(3)]
     memo: Option<Memo>,
     /// Whether this output is change sent back to the sending account.
     /// None means the exporter had no change information.
+    #[n(4)]
     is_change: Option<bool>,
     /// The txid of the transaction that spent this output, if it has been spent.
+    #[n(5)]
     spent_by: Option<TxId>,
 }
 
 /// Locates a note commitment within its pool's note commitment tree, either
 /// as a bare position or via a full incremental witness (which carries the
 /// position along with an inclusion proof).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum CommitmentTreeData<W> {
     /// The 0-based leaf position of the note commitment in the tree.
-    Position(u64),
+    #[n(0)]
+    Position(#[n(0)] TreePosition),
     /// A full incremental witness; the position is recoverable from it.
-    Witness(W),
+    #[n(1)]
+    Witness(#[n(0)] W),
 }
 
-impl<W> From<CommitmentTreeData<W>> for Envelope
-where
-    W: Into<Envelope>,
-{
-    fn from(value: CommitmentTreeData<W>) -> Self {
-        match value {
-            CommitmentTreeData::Position(position) => Envelope::new(position)
-                .add_type("CommitmentTreeData")
-                .add_assertion("variant", "position"),
-            CommitmentTreeData::Witness(w) => {
-                let witness: Envelope = w.into();
-                Envelope::new("witness")
-                    .add_type("CommitmentTreeData")
-                    .add_assertion("witness", witness)
-            }
-        }
+/// The 0-based leaf position of a note commitment in its pool's note
+/// commitment tree.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode)]
+#[cbor(map)]
+pub struct TreePosition {
+    #[n(0)]
+    position: u64,
+}
+
+impl TreePosition {
+    pub fn new(position: u64) -> Self {
+        Self { position }
+    }
+
+    pub fn position(&self) -> u64 {
+        self.position
     }
 }
 
-impl<W> TryFrom<Envelope> for CommitmentTreeData<W>
-where
-    W: TryFrom<Envelope, Error = bc_envelope::Error>,
-{
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.check_type("CommitmentTreeData")?;
-        match envelope.try_optional_object_for_predicate::<W>("witness")? {
-            Some(w) => Ok(CommitmentTreeData::Witness(w)),
-            None => {
-                let variant: String = envelope.extract_object_for_predicate("variant")?;
-                match variant.as_str() {
-                    "position" => Ok(CommitmentTreeData::Position(envelope.extract_subject()?)),
-                    other => Err(bc_envelope::Error::General(format!(
-                        "unknown CommitmentTreeData variant: {}",
-                        other
-                    ))),
-                }
-            }
-        }
+impl From<u64> for TreePosition {
+    fn from(position: u64) -> Self {
+        Self::new(position)
     }
 }
 
@@ -91,33 +83,135 @@ where
 ///
 /// This enum is non-exhaustive because future network upgrades may add
 /// pools.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 #[non_exhaustive]
 pub enum ReceivedOutputPool {
-    /// These fields support representing UTXOs whose containing
-    /// transaction's full data is unavailable; when the raw transaction is
-    /// available it is authoritative for the script.
-    Transparent {
-        script: Option<Script>,
-        /// The greatest block height at which this output was observed
-        /// unspent (maps to zcash_client_sqlite
-        /// transparent_received_outputs.max_observed_unspent_height).
-        max_observed_unspent_height: Option<BlockHeight>,
-    },
-    /// For Sprout, output_index identifies the JoinSplit output as
-    /// 2 * joinsplit_index + output_index_within_joinsplit (every JoinSplit
-    /// has exactly two outputs). Sprout note spendability is not
-    /// reconstructible from this data alone; a Sprout-capable importer must
-    /// rescan.
-    Sprout { nullifier: Option<Blob<32>> },
-    Sapling {
+    #[n(0)]
+    Transparent(#[n(0)] TransparentOutputData),
+    #[n(1)]
+    Sprout(#[n(0)] SproutOutputData),
+    #[n(2)]
+    Sapling(#[n(0)] SaplingOutputData),
+    #[n(3)]
+    Orchard(#[n(0)] OrchardOutputData),
+}
+
+/// Metadata for a received transparent output.
+///
+/// These fields support representing UTXOs whose containing transaction's
+/// full data is unavailable; when the raw transaction is available it is
+/// authoritative for the script.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode)]
+#[cbor(map)]
+pub struct TransparentOutputData {
+    #[n(0)]
+    script: Option<Script>,
+    /// The greatest block height at which this output was observed
+    /// unspent (maps to zcash_client_sqlite
+    /// transparent_received_outputs.max_observed_unspent_height).
+    #[n(1)]
+    max_observed_unspent_height: Option<BlockHeight>,
+}
+
+impl TransparentOutputData {
+    pub fn new(script: Option<Script>, max_observed_unspent_height: Option<BlockHeight>) -> Self {
+        Self {
+            script,
+            max_observed_unspent_height,
+        }
+    }
+
+    pub fn script(&self) -> Option<&Script> {
+        self.script.as_ref()
+    }
+
+    pub fn max_observed_unspent_height(&self) -> Option<BlockHeight> {
+        self.max_observed_unspent_height
+    }
+}
+
+/// Metadata for a received Sprout output.
+///
+/// For Sprout, output_index identifies the JoinSplit output as
+/// 2 * joinsplit_index + output_index_within_joinsplit (every JoinSplit
+/// has exactly two outputs). Sprout note spendability is not
+/// reconstructible from this data alone; a Sprout-capable importer must
+/// rescan.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode)]
+#[cbor(map)]
+pub struct SproutOutputData {
+    #[n(0)]
+    nullifier: Option<Nullifier>,
+}
+
+impl SproutOutputData {
+    pub fn new(nullifier: Option<Nullifier>) -> Self {
+        Self { nullifier }
+    }
+
+    pub fn nullifier(&self) -> Option<&Nullifier> {
+        self.nullifier.as_ref()
+    }
+}
+
+/// Metadata for a received Sapling output.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode)]
+#[cbor(map)]
+pub struct SaplingOutputData {
+    #[n(0)]
+    tree_data: Option<CommitmentTreeData<SaplingWitness>>,
+    #[n(1)]
+    nullifier: Option<Nullifier>,
+}
+
+impl SaplingOutputData {
+    pub fn new(
         tree_data: Option<CommitmentTreeData<SaplingWitness>>,
-        nullifier: Option<Blob<32>>,
-    },
-    Orchard {
+        nullifier: Option<Nullifier>,
+    ) -> Self {
+        Self {
+            tree_data,
+            nullifier,
+        }
+    }
+
+    pub fn tree_data(&self) -> Option<&CommitmentTreeData<SaplingWitness>> {
+        self.tree_data.as_ref()
+    }
+
+    pub fn nullifier(&self) -> Option<&Nullifier> {
+        self.nullifier.as_ref()
+    }
+}
+
+/// Metadata for a received Orchard output.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode)]
+#[cbor(map)]
+pub struct OrchardOutputData {
+    #[n(0)]
+    tree_data: Option<CommitmentTreeData<OrchardWitness>>,
+    #[n(1)]
+    nullifier: Option<Nullifier>,
+}
+
+impl OrchardOutputData {
+    pub fn new(
         tree_data: Option<CommitmentTreeData<OrchardWitness>>,
-        nullifier: Option<Blob<32>>,
-    },
+        nullifier: Option<Nullifier>,
+    ) -> Self {
+        Self {
+            tree_data,
+            nullifier,
+        }
+    }
+
+    pub fn tree_data(&self) -> Option<&CommitmentTreeData<OrchardWitness>> {
+        self.tree_data.as_ref()
+    }
+
+    pub fn nullifier(&self) -> Option<&Nullifier> {
+        self.nullifier.as_ref()
+    }
 }
 
 impl ReceivedOutput {
@@ -143,19 +237,16 @@ impl ReceivedOutput {
     /// The position of the output's note commitment in its pool's note
     /// commitment tree, if known. Returns `None` for non-shielded pools.
     pub fn commitment_tree_position(&self) -> Option<u64> {
+        fn position_of<W: NotePosition>(td: &CommitmentTreeData<W>) -> u64 {
+            match td {
+                CommitmentTreeData::Position(p) => p.position(),
+                CommitmentTreeData::Witness(w) => w.note_position() as u64,
+            }
+        }
+
         match &self.pool {
-            ReceivedOutputPool::Sapling { tree_data, .. } => {
-                tree_data.as_ref().map(|td| match td {
-                    CommitmentTreeData::Position(p) => *p,
-                    CommitmentTreeData::Witness(w) => w.note_position() as u64,
-                })
-            }
-            ReceivedOutputPool::Orchard { tree_data, .. } => {
-                tree_data.as_ref().map(|td| match td {
-                    CommitmentTreeData::Position(p) => *p,
-                    CommitmentTreeData::Witness(w) => w.note_position() as u64,
-                })
-            }
+            ReceivedOutputPool::Sapling(data) => data.tree_data().map(position_of),
+            ReceivedOutputPool::Orchard(data) => data.tree_data().map(position_of),
             _ => None,
         }
     }
@@ -195,140 +286,33 @@ impl ReceivedOutput {
     }
 }
 
-impl From<ReceivedOutput> for Envelope {
-    fn from(value: ReceivedOutput) -> Self {
-        let e = Envelope::new(value.output_index)
-            .add_type("ReceivedOutput")
-            .add_optional_assertion("value", value.value);
-        let e = match value.pool {
-            ReceivedOutputPool::Transparent {
-                script,
-                max_observed_unspent_height,
-            } => {
-                let e = e.add_assertion("pool", "transparent");
-                let e = match script {
-                    Some(s) => e.add_assertion("script", s),
-                    None => e,
-                };
-                match max_observed_unspent_height {
-                    Some(h) => e.add_assertion("max_observed_unspent_height", h),
-                    None => e,
-                }
-            }
-            ReceivedOutputPool::Sprout { nullifier } => {
-                let e = e.add_assertion("pool", "sprout");
-                match nullifier {
-                    Some(nf) => e.add_assertion("nullifier", nf),
-                    None => e,
-                }
-            }
-            ReceivedOutputPool::Sapling {
-                tree_data,
-                nullifier,
-            } => {
-                let e = e.add_assertion("pool", "sapling");
-                let e = match tree_data {
-                    Some(td) => e.add_assertion("tree_data", td),
-                    None => e,
-                };
-                match nullifier {
-                    Some(nf) => e.add_assertion("nullifier", nf),
-                    None => e,
-                }
-            }
-            ReceivedOutputPool::Orchard {
-                tree_data,
-                nullifier,
-            } => {
-                let e = e.add_assertion("pool", "orchard");
-                let e = match tree_data {
-                    Some(td) => e.add_assertion("tree_data", td),
-                    None => e,
-                };
-                match nullifier {
-                    Some(nf) => e.add_assertion("nullifier", nf),
-                    None => e,
-                }
-            }
-        };
-        let e = match value.memo {
-            Some(m) => e.add_assertion("memo", m),
-            None => e,
-        };
-        let e = e.add_optional_assertion("is_change", value.is_change);
-        match value.spent_by {
-            Some(txid) => e.add_assertion("spent_by", txid),
-            None => e,
-        }
+/// Internal helper for extracting the note position from a witness type.
+trait NotePosition {
+    fn note_position(&self) -> u32;
+}
+
+impl NotePosition for SaplingWitness {
+    fn note_position(&self) -> u32 {
+        SaplingWitness::note_position(self)
     }
 }
 
-impl TryFrom<Envelope> for ReceivedOutput {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.check_type("ReceivedOutput")?;
-        let output_index: u32 = envelope.extract_subject()?;
-        let value: Option<Amount> = envelope.extract_optional_object_for_predicate("value")?;
-        let pool_tag: String = envelope.extract_object_for_predicate("pool")?;
-        let pool = match pool_tag.as_str() {
-            "transparent" => {
-                let script = envelope.extract_optional_object_for_predicate("script")?;
-                let max_observed_unspent_height = envelope
-                    .extract_optional_object_for_predicate("max_observed_unspent_height")?;
-                ReceivedOutputPool::Transparent {
-                    script,
-                    max_observed_unspent_height,
-                }
-            }
-            "sprout" => {
-                let nullifier = envelope.try_optional_object_for_predicate("nullifier")?;
-                ReceivedOutputPool::Sprout { nullifier }
-            }
-            "sapling" => {
-                let tree_data = envelope.try_optional_object_for_predicate("tree_data")?;
-                let nullifier = envelope.try_optional_object_for_predicate("nullifier")?;
-                ReceivedOutputPool::Sapling {
-                    tree_data,
-                    nullifier,
-                }
-            }
-            "orchard" => {
-                let tree_data = envelope.try_optional_object_for_predicate("tree_data")?;
-                let nullifier = envelope.try_optional_object_for_predicate("nullifier")?;
-                ReceivedOutputPool::Orchard {
-                    tree_data,
-                    nullifier,
-                }
-            }
-            other => {
-                return Err(bc_envelope::Error::General(format!(
-                    "unknown pool type: {}",
-                    other
-                )));
-            }
-        };
-        let memo = envelope.extract_optional_object_for_predicate("memo")?;
-        let is_change = envelope.extract_optional_object_for_predicate::<bool>("is_change")?;
-        let spent_by = envelope.try_optional_object_for_predicate("spent_by")?;
-        Ok(Self {
-            output_index,
-            pool,
-            value,
-            memo,
-            is_change,
-            spent_by,
-        })
+impl NotePosition for OrchardWitness {
+    fn note_position(&self) -> u32 {
+        OrchardWitness::note_position(self)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::test_envelope_roundtrip;
+    use crate::test_cbor_roundtrip;
 
-    use super::{CommitmentTreeData, ReceivedOutput, ReceivedOutputPool};
+    use super::{
+        CommitmentTreeData, OrchardOutputData, ReceivedOutput, ReceivedOutputPool,
+        SaplingOutputData, SproutOutputData, TransparentOutputData, TreePosition,
+    };
     use crate::{
-        Amount, Blob, BlockHeight, Memo, Script, TxId, orchard::OrchardWitness,
+        Amount, BlockHeight, Memo, Nullifier, Script, TxId, orchard::OrchardWitness,
         sapling::SaplingWitness,
     };
 
@@ -337,7 +321,9 @@ mod tests {
             use rand::Rng;
             let mut rng = rand::rng();
             if rng.random_bool(0.5) {
-                CommitmentTreeData::Position(rng.random_range(0..u32::MAX as u64))
+                CommitmentTreeData::Position(TreePosition::new(
+                    rng.random_range(0..u32::MAX as u64),
+                ))
             } else {
                 CommitmentTreeData::Witness(W::random())
             }
@@ -350,21 +336,19 @@ mod tests {
             let mut rng = rand::rng();
             let output_index = rng.random_range(0..100u32);
             let pool = match rng.random_range(0..4u32) {
-                0 => ReceivedOutputPool::Transparent {
-                    script: Script::opt_random(),
-                    max_observed_unspent_height: BlockHeight::opt_random(),
-                },
-                1 => ReceivedOutputPool::Sprout {
-                    nullifier: Blob::opt_random(),
-                },
-                2 => ReceivedOutputPool::Sapling {
-                    tree_data: CommitmentTreeData::opt_random(),
-                    nullifier: Blob::opt_random(),
-                },
-                _ => ReceivedOutputPool::Orchard {
-                    tree_data: CommitmentTreeData::opt_random(),
-                    nullifier: Blob::opt_random(),
-                },
+                0 => ReceivedOutputPool::Transparent(TransparentOutputData::new(
+                    Script::opt_random(),
+                    BlockHeight::opt_random(),
+                )),
+                1 => ReceivedOutputPool::Sprout(SproutOutputData::new(Nullifier::opt_random())),
+                2 => ReceivedOutputPool::Sapling(SaplingOutputData::new(
+                    CommitmentTreeData::opt_random(),
+                    Nullifier::opt_random(),
+                )),
+                _ => ReceivedOutputPool::Orchard(OrchardOutputData::new(
+                    CommitmentTreeData::opt_random(),
+                    Nullifier::opt_random(),
+                )),
             };
             let mut output = ReceivedOutput::new(output_index, pool);
             if let Some(value) = Amount::opt_random() {
@@ -383,17 +367,13 @@ mod tests {
         }
     }
 
-    test_envelope_roundtrip!(ReceivedOutput);
-    test_envelope_roundtrip!(
+    test_cbor_roundtrip!(ReceivedOutput);
+    test_cbor_roundtrip!(
         CommitmentTreeData<SaplingWitness>,
-        20,
-        false,
         test_commitment_tree_data_sapling
     );
-    test_envelope_roundtrip!(
+    test_cbor_roundtrip!(
         CommitmentTreeData<OrchardWitness>,
-        20,
-        false,
         test_commitment_tree_data_orchard
     );
 }

@@ -1,45 +1,31 @@
-use bc_envelope::prelude::*;
+use minicbor::{Decode, Encode};
 
-use crate::{Amount, Indexed};
+use crate::Amount;
 
 /// Sender-side metadata for a transparent output not recoverable from the chain
 /// without full transaction data.
 ///
 /// Preserves the recipient address and value so the sending wallet can
 /// reconstruct payment history.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cbor(map)]
 pub struct TransparentSentOutput {
-    index: usize,
-
     /// Index of the output within the transaction's transparent output
     /// (vout) list (maps to zcash_client_sqlite sent_notes.output_index).
+    #[n(0)]
     output_index: u32,
 
     /// The recipient transparent address string.
+    #[n(1)]
     recipient_address: String,
 
+    #[n(2)]
     value: Amount,
 }
 
-impl Indexed for TransparentSentOutput {
-    fn index(&self) -> usize {
-        self.index
-    }
-
-    fn set_index(&mut self, index: usize) {
-        self.index = index;
-    }
-}
-
 impl TransparentSentOutput {
-    pub fn from_parts(
-        index: usize,
-        output_index: u32,
-        recipient_address: String,
-        value: Amount,
-    ) -> Self {
+    pub fn from_parts(output_index: u32, recipient_address: String, value: Amount) -> Self {
         Self {
-            index,
             output_index,
             recipient_address,
             value,
@@ -71,45 +57,15 @@ impl TransparentSentOutput {
     }
 }
 
-impl From<TransparentSentOutput> for Envelope {
-    fn from(value: TransparentSentOutput) -> Self {
-        Envelope::new(value.index)
-            .add_type("TransparentSentOutput")
-            .add_assertion("output_index", value.output_index)
-            .add_assertion("recipient_address", value.recipient_address)
-            .add_assertion("value", value.value)
-    }
-}
-
-impl TryFrom<Envelope> for TransparentSentOutput {
-    type Error = bc_envelope::Error;
-
-    fn try_from(envelope: Envelope) -> bc_envelope::Result<Self> {
-        envelope.check_type("TransparentSentOutput")?;
-        let index = envelope.extract_subject()?;
-        let output_index = envelope.extract_object_for_predicate("output_index")?;
-        let recipient_address = envelope.extract_object_for_predicate("recipient_address")?;
-        let value = envelope.extract_object_for_predicate("value")?;
-
-        Ok(TransparentSentOutput {
-            index,
-            output_index,
-            recipient_address,
-            value,
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::{Amount, test_envelope_roundtrip};
+    use crate::{Amount, test_cbor_roundtrip};
 
     use super::TransparentSentOutput;
 
     impl crate::RandomInstance for TransparentSentOutput {
         fn random() -> Self {
             Self {
-                index: 0,
                 output_index: u32::random() % 100,
                 recipient_address: String::random(),
                 value: Amount::random(),
@@ -117,5 +73,5 @@ mod tests {
         }
     }
 
-    test_envelope_roundtrip!(TransparentSentOutput);
+    test_cbor_roundtrip!(TransparentSentOutput);
 }

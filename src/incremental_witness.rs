@@ -1,14 +1,23 @@
+use minicbor::{Decode, Encode};
+
 /// A Merkle authentication path proving a note commitment's inclusion in the
 /// commitment tree, along with the tree state at the time it was computed.
 ///
 /// Without valid witness data, unspent shielded notes cannot be spent.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cbor(map)]
 pub struct IncrementalWitness<const DEPTH: usize, Node> {
+    #[n(0)]
     note_commitment: Node,
+    #[n(1)]
     note_position: u32,
+    #[n(2)]
     merkle_path: Vec<Node>,
+    #[n(3)]
     anchor: Node,
+    #[n(4)]
     anchor_tree_size: u32,
+    #[n(5)]
     anchor_frontier: Vec<Node>,
 }
 
@@ -77,17 +86,16 @@ impl<const DEPTH: usize, Node> IncrementalWitness<DEPTH, Node> {
 
 #[cfg(test)]
 mod tests {
-    use bc_rand::rng_next_with_upper_bound;
+    use rand::Rng;
 
     use super::IncrementalWitness;
     use crate::RandomInstance;
 
     impl<const DEPTH: usize, Node: RandomInstance> RandomInstance for IncrementalWitness<DEPTH, Node> {
         fn random() -> Self {
-            let mut rng = bc_rand::thread_rng();
-            let note_position = rng_next_with_upper_bound(&mut rng, u32::MAX / 4);
-            let anchor_tree_size =
-                note_position + rng_next_with_upper_bound(&mut rng, u32::MAX / 16);
+            let mut rng = rand::rng();
+            let note_position = rng.random_range(0..u32::MAX / 4);
+            let anchor_tree_size = note_position + rng.random_range(0..u32::MAX / 16);
             Self {
                 note_commitment: Node::random(),
                 note_position,
