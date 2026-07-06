@@ -46,7 +46,7 @@ fn ufvk_account(txid1: TxId, txid2: TxId) -> Account {
     )));
     account.set_name("primary");
     account.set_key_source(KeySource::Derived(DerivedKeySource::new(
-        SeedFingerprint::new([0x5F; 32]),
+        SeedFingerprint::new("zip32seedfp1conf5f"),
         0,
         Some(3),
     )));
@@ -275,7 +275,7 @@ fn transactions(txid1: TxId, txid2: TxId, txid3: TxId) -> BTreeMap<TxId, Transac
 fn secret_store() -> SecretStore {
     let mut store = SecretStore::new();
     store.add_seed(SeedEntry::new(
-        SeedFingerprint::new([0x5F; 32]),
+        SeedFingerprint::new("zip32seedfp1conf5f"),
         SeedMaterial::Bip39Mnemonic(Bip39Mnemonic::new(
             "abandon abandon abandon abandon abandon abandon abandon abandon \
              abandon abandon abandon about",
@@ -283,7 +283,7 @@ fn secret_store() -> SecretStore {
         )),
     ));
     store.add_seed(SeedEntry::new(
-        SeedFingerprint::new([0x60; 32]),
+        SeedFingerprint::new("zip32seedfp1conf60"),
         SeedMaterial::LegacySeed(LegacySeed::new([0x99; 32])),
     ));
     store.add_transparent_key(TransparentKeyEntry::new(

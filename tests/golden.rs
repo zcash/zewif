@@ -34,7 +34,7 @@ const TXID_BARE: [u8; 32] = [0xB2; 32];
 const TXID_COMPACT: [u8; 32] = [0xC3; 32];
 
 /// The fingerprint of the mnemonic seed shared by the derived accounts.
-const SEED_FINGERPRINT: [u8; 32] = [0x0F; 32];
+const SEED_FINGERPRINT: &str = "zip32seedfp1goldenfixtureseed";
 
 /// An empty-ish document: no wallets, transactions, secrets, or metadata.
 fn minimal_fixture() -> Zewif {
@@ -456,7 +456,7 @@ fn secret_store() -> SecretStore {
         )),
     ));
     store.add_seed(SeedEntry::new(
-        SeedFingerprint::new([0x9E; 32]),
+        SeedFingerprint::new("zip32seedfp1goldenlegacyseed"),
         SeedMaterial::LegacySeed(LegacySeed::new([0x9F; 32])),
     ));
     store.add_transparent_key(TransparentKeyEntry::new(
