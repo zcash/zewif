@@ -312,6 +312,10 @@ fn secret_store() -> SecretStore {
         sapling::SaplingExtendedFullViewingKey::new("zxviewtestsapling1conformancekeyed"),
         sapling::SaplingExtendedSpendingKey::new("secret-extended-key-test1conformance"),
     ));
+    store.add_unified_key(zewif::UnifiedKeyEntry::new(
+        UnifiedFullViewingKey::new("uviewregtestconformanceextracted"),
+        zewif::UnifiedSpendingKey::new("uskregtest1conformanceextractedkey"),
+    ));
     store.add_sprout_key(SproutKeyEntry::new(
         "zcconformancesproutaddress",
         sprout::SproutSpendingKey::new("STconformancesproutspendingkey"),
