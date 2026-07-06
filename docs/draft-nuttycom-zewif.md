@@ -136,17 +136,25 @@ heights are unsigned integers less than 2^32. Monetary values are unsigned
 integers in zatoshis, at most 2,100,000,000,000,000 (`MAX_MONEY`). Timestamps
 are integer seconds since the Unix epoch.
 
-Where a value has a canonical Zcash encoding — unified addresses and viewing
-keys (ZIP 316 [^ZIP316]), raw transactions, ZIP 32 fingerprints [^ZIP32] —
-ZeWIF stores that encoding verbatim rather than a decomposition, so that
-consumers do not require protocol-library support to carry the data.
+Where a value has a canonical Zcash encoding, ZeWIF stores that encoding
+verbatim rather than a decomposition, so that consumers do not require
+protocol-library support to carry the data. Addresses and keys use their
+canonical *string* encodings — unified addresses and viewing keys per
+ZIP 316 [^ZIP316], Sapling extended keys per ZIP 32 [^ZIP32], Sprout keys
+and transparent private keys (WIF) per the Zcash protocol specification's
+Base58Check forms [^PROTOCOL], and extracted unified spending keys per the
+unified raw encodings draft [^ZIPRAW] — which carry a checksum and embed
+type and network discrimination, so each key is independently
+integrity-checked. Raw transactions and ZIP 32 seed fingerprints use their
+canonical byte encodings.
 
 ## Sensitive material
 
 All secret key material in a ZeWIF document lives in the `secret-store`
 record, referenced from the public wallet structure by public identifiers:
 seeds by their ZIP 32 seed fingerprint, transparent private keys by their
-public key, Sapling spending keys by their full viewing key encoding, and
+public key, Sapling spending keys by their extended full viewing key,
+extracted unified spending keys by their unified full viewing key, and
 Sprout spending keys by their address.
 
 The `secrets` node of the top-level record is either the secret store in
@@ -597,10 +605,13 @@ never-reuse evolution discipline as protobuf field numbers. The CDDL registry
 in this document, which is versioned and published, supplies the names.
 
 **Why `[id, [body]]` unions.** Encoding data-bearing variants with exactly
-one record inside an array gives every variant body a named schema rule,
-keeps the encoding of "no payload" (`[]`) distinct from any record, and — in
+one item inside an array gives every variant body a named schema rule,
+keeps the encoding of "no payload" (`[]`) distinct from any body, and — in
 the reference implementation — sidesteps a class of encoder disagreements
-about optional fields embedded directly in variant bodies.
+about optional fields embedded directly in variant bodies. A body is a
+record unless the payload is a single canonical encoding, in which case
+that encoding's byte or text string is carried directly: a one-field
+record shell around such an encoding would name the same concept twice.
 
 **Prior format.** An earlier iteration of ZeWIF serialized to Gordian
 Envelope (dcbor). That design imported a large dependency stack (223 crates
@@ -643,14 +654,16 @@ specification. Implementation notes, non-normative:
 
 - The crate uses `minicbor` with derived codecs; integer field indices in the
   schema correspond to `#[n(...)]` attributes, records use `#[cbor(map)]`,
-  payload-free enumerations use `#[cbor(index_only)]`, and byte fields use
-  the `minicbor::bytes` wrapper so they encode as `bstr`.
+  payload-free enumerations use `#[cbor(index_only)]`, fixed-size byte types
+  carry generated length-checked `bstr` codecs, and canonically-text-encoded
+  keys are transparent newtypes over `tstr`.
 - Deterministic map-key ordering is obtained by declaring record fields in
   ascending index order and using ordered collections (sorted arrays keyed
   by txid) rather than hash maps.
 - Conformance is tested by randomized round-trip tests plus byte-exact
-  re-encoding checks; test vectors are generated from this specification
-  independently of the codec implementation.
+  re-encoding checks. Conformance test vectors derived from this
+  specification independently of the codec implementation will accompany
+  submission for community review.
 - The normativity of this schema, rather than of any codec library, is
   enforced mechanically: golden byte-exact fixture documents are committed
   to the repository and asserted in continuous integration, so a behavioral
@@ -670,5 +683,11 @@ specification. Implementation notes, non-normative:
 [^ZIP200]: ZIP 200: Network Upgrade Mechanism.
 [^ZIP315]: ZIP 315: Best Practices for Wallet Handling of Multiple Pools.
 [^ZIP316]: ZIP 316: Unified Addresses and Unified Viewing Keys.
+[^ZIP320]: ZIP 320: Defining an Address Type to which funds can only be sent
+  from Transparent Addresses.
+[^ZIPRAW]: Unified raw encodings (draft ZIP).
+  https://github.com/zcash/zips/pull/660
+[^PROTOCOL]: Zcash Protocol Specification, section "Encodings of Addresses
+  and Keys".
 [^AGE]: age: a simple, modern and secure file encryption format.
   https://age-encryption.org/v1
