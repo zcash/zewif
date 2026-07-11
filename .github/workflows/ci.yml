@@ -26,12 +26,12 @@ jobs:
         with:
           persist-credentials: false
       - name: Install MSRV toolchain
-        run: rustup toolchain install 1.85.1 --profile minimal
+        run: rustup toolchain install 1.88.0 --profile minimal
       # --locked: the committed Cargo.lock is the MSRV-compatible resolution
       # of the dependency tree; a fresh resolution may select newer releases
       # that require a later rustc.
       - name: Run tests
-        run: cargo +1.85.1 test --all-features --verbose --workspace --locked
+        run: cargo +1.88.0 test --all-features --verbose --workspace --locked
 
   bitrot:
     name: Bitrot check
