@@ -7,6 +7,8 @@ and this library adheres to Rust's notion of
 
 ## [Unreleased]
 
+## [1.0.0-rc.2] 2026-07-11
+
 ### Changed
 - MSRV is now 1.88, and the CBOR codec dependency is now minicbor 2.
 - The wire encoding of tagged unions is flattened from `[variant-id, [body?]]`
@@ -16,7 +18,7 @@ and this library adheres to Rust's notion of
   release-candidate status; documents produced by 1.0.0-rc.1 do not decode
   with this revision.
 
-[1.0.0-rc.1] 2026-07-09
+## [1.0.0-rc.1] 2026-07-09
 
 Initial release candidate for the Zcash Wallet Interchange Format. The 
 serialized format defined herein should not be considered stable until the
