@@ -12,6 +12,7 @@ impl Copy for MerkleNode {}
 /// An unknown frontier is represented by a containing `Option` being `None`
 /// — `Frontier::Empty` specifically means an empty tree.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cbor(flat)]
 pub enum Frontier {
     /// The tree contains no note commitments as of the reference block.
     #[n(0)]

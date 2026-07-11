@@ -16,6 +16,7 @@ use crate::{
 /// This enum is non-exhaustive because future network upgrades may add
 /// pools.
 #[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[cbor(flat)]
 #[non_exhaustive]
 pub enum SentOutput {
     #[n(0)]

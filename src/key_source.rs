@@ -4,6 +4,7 @@ use crate::SeedFingerprint;
 
 /// How an account's keys were obtained.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cbor(flat)]
 pub enum KeySource {
     /// Derived from an HD seed via ZIP-32.
     #[n(0)]

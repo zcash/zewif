@@ -9,6 +9,7 @@ use crate::{
 /// This determines what the account can observe on-chain. Each variant
 /// corresponds to a different era or style of Zcash key management.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cbor(flat)]
 pub enum AccountViewingKey {
     /// A Unified Full Viewing Key (canonical ZIP-316 encoding), which may
     /// contain Orchard, Sapling, and/or transparent components.

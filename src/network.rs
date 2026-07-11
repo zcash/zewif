@@ -4,6 +4,7 @@ use minicbor::{Decode, Encode};
 
 /// The Zcash network a wallet belongs to: mainnet, testnet, or regtest.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Encode, Decode)]
+#[cbor(flat)]
 pub enum Network {
     #[n(0)]
     Mainnet,
@@ -67,24 +68,19 @@ mod tests {
 
     test_cbor_roundtrip!(Network);
 
-    /// Tagged unions encode as `[variant-id, [body?]]`: an empty body array
-    /// for payload-free variants, a single record for data-bearing ones.
+    /// Tagged unions encode as `[variant-id, body?]`: a one-element array
+    /// for payload-free variants, identifier plus a single body record for
+    /// data-bearing ones.
     #[test]
     fn union_wire_shape() {
-        assert_eq!(
-            minicbor::to_vec(Network::Mainnet).unwrap(),
-            [0x82, 0x00, 0x80]
-        );
-        assert_eq!(
-            minicbor::to_vec(Network::Testnet).unwrap(),
-            [0x82, 0x01, 0x80]
-        );
+        assert_eq!(minicbor::to_vec(Network::Mainnet).unwrap(), [0x81, 0x00]);
+        assert_eq!(minicbor::to_vec(Network::Testnet).unwrap(), [0x81, 0x01]);
         let regtest = Network::Regtest(RegtestParams::new([(0xc2d6d0b4, 1)].into()));
         assert_eq!(
             minicbor::to_vec(&regtest).unwrap(),
-            // [2, [{0: {0xc2d6d0b4: 1}}]]
+            // [2, {0: {0xc2d6d0b4: 1}}]
             [
-                0x82, 0x02, 0x81, 0xa1, 0x00, 0xa1, 0x1a, 0xc2, 0xd6, 0xd0, 0xb4, 0x01
+                0x82, 0x02, 0xa1, 0x00, 0xa1, 0x1a, 0xc2, 0xd6, 0xd0, 0xb4, 0x01
             ]
         );
     }

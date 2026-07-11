@@ -17,6 +17,7 @@ use crate::Error;
 /// the absence of an expected secret-store entry as a viewing-only import
 /// of the affected item, not as an error.
 #[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[cbor(flat)]
 pub enum Secrets {
     /// The secret store in plain CBOR.
     #[n(0)]

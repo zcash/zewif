@@ -8,6 +8,7 @@ use minicbor::{Decode, Encode};
 /// legacy zcashd random-key addresses), the private key, if exported, is
 /// stored in the secret store under the address's public key.
 #[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[cbor(flat)]
 pub enum TransparentSpendAuthority {
     /// Key derived from an HD seed; derivation info is sufficient.
     #[n(0)]

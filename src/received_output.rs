@@ -44,6 +44,7 @@ pub struct ReceivedOutput {
 /// as a bare position or via a full incremental witness (which carries the
 /// position along with an inclusion proof).
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cbor(flat)]
 pub enum CommitmentTreeData<W> {
     /// The 0-based leaf position of the note commitment in the tree.
     #[n(0)]
@@ -84,6 +85,7 @@ impl From<u64> for TreePosition {
 /// This enum is non-exhaustive because future network upgrades may add
 /// pools.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cbor(flat)]
 #[non_exhaustive]
 pub enum ReceivedOutputPool {
     #[n(0)]

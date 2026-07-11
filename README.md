@@ -145,7 +145,7 @@ Encoding) under the normative CDDL schema in
 [`docs/draft-nuttycom-zewif.md`](docs/draft-nuttycom-zewif.md). Records are
 CBOR maps with small integer keys (the COSE/CWT convention), enumerations
 without payload are bare unsigned integers, and tagged unions are
-`[variant-id, [body?]]` arrays. Individual types encode and decode via
+`[variant-id, body?]` arrays. Individual types encode and decode via
 [`minicbor`](https://crates.io/crates/minicbor). A complete ZeWIF document is
 written and read with `Zewif::to_bytes` / `Zewif::from_bytes`, which frame the
 CBOR payload with the container header defined by the specification: the ASCII

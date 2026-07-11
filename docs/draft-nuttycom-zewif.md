@@ -124,12 +124,12 @@ one encoding:
    index to a field name.
 2. **Enumerations without payload** (key scope, account purpose) are bare
    unsigned integers.
-3. **Tagged unions** (sums-of-products) are two-element arrays
-   `[variant-id, [body?]]`: an unsigned variant identifier followed by an
-   array that is empty for payload-free variants and contains exactly one
-   item for data-bearing variants — a record, or, where the payload is a
-   single canonical encoding, that encoding's byte or text string directly.
-   Variant identifiers follow the same never-reuse rule as field indices.
+3. **Tagged unions** (sums-of-products) are arrays `[variant-id, body?]`:
+   an unsigned variant identifier, followed for data-bearing variants by
+   exactly one body item — a record, or, where the payload is a single
+   canonical encoding, that encoding's byte or text string directly.
+   Payload-free variants are the one-element array `[variant-id]`. Variant
+   identifiers follow the same never-reuse rule as field indices.
 
 Byte sequences are CBOR byte strings (`bstr`); text is UTF-8 (`tstr`). Block
 heights are unsigned integers less than 2^32. Monetary values are unsigned
@@ -199,9 +199,9 @@ wallet = {
   ? 3: extensions,
 }
 
-network = [0, []]                 ; mainnet
-        / [1, []]                 ; testnet
-        / [2, [regtest-params]]   ; regtest
+network = [0]                     ; mainnet
+        / [1]                     ; testnet
+        / [2, regtest-params]     ; regtest
 
 ; Regtest networks vary in their network-upgrade activation schedules, and
 ; wallet data recorded against one activation schedule is in general
@@ -239,10 +239,10 @@ account = {
   ? 13: extensions,
 }
 
-account-viewing-key = [0, [ufvk]]              ; ZIP 316 UFVK
-                    / [1, [sapling-extfvk]]    ; standalone Sapling extfvk
-                    / [2, [sprout-vk]]         ; Sprout viewing key
-                    / [3, []]                  ; transparent address set
+account-viewing-key = [0, ufvk]                ; ZIP 316 UFVK
+                    / [1, sapling-extfvk]      ; standalone Sapling extfvk
+                    / [2, sprout-vk]           ; Sprout viewing key
+                    / [3]                      ; transparent address set
                                                ; (legacy zcashd)
 
 ; Viewing keys are carried in their canonical string encodings, which
@@ -252,8 +252,8 @@ sapling-extfvk = tstr           ; ZIP 32 Bech32 ("zxviews..." /
                                 ; "zxviewtestsapling...")
 sprout-vk      = tstr           ; Base58Check ("ZiVK..." / "ZiVt...")
 
-key-source = [0, [key-source-derived]]
-           / [1, []]            ; imported
+key-source = [0, key-source-derived]
+           / [1]                ; imported
 
 key-source-derived = {
   0: seed-fingerprint,
@@ -274,8 +274,8 @@ chain-state = {
   ? 4: frontier,                ; Ironwood note commitment tree frontier
 }                               ; future pools: new indices
 
-frontier = [0, []]              ; the tree is empty as of the block
-         / [1, [frontier-data]]
+frontier = [0]                  ; the tree is empty as of the block
+         / [1, frontier-data]
                                 ; a more compact representation — omitting a
                                 ; right-hand leaf in favor of the root of the
                                 ; subtree it completes — may be added as a
@@ -310,10 +310,10 @@ key-scope = 0                   ; external: user-facing receiving
           / 2                   ; ephemeral: ZIP 320 single-use transparent
           / 3                   ; foreign: imported standalone key or script
 
-protocol-address = [0, [transparent-address]]
-                 / [1, [sprout-address]]
-                 / [2, [sapling-address]]
-                 / [3, [unified-address]]
+protocol-address = [0, transparent-address]
+                 / [1, sprout-address]
+                 / [2, sapling-address]
+                 / [3, unified-address]
 
 transparent-address = {
   0: tstr,                      ; canonical address string
@@ -324,8 +324,8 @@ transparent-address = {
 }
 
 transparent-spend-authority
-  = [0, [derivation-info]]      ; derived: recoverable from seed
-  / [1, []]                     ; imported: private key, if exported, is in
+  = [0, derivation-info]        ; derived: recoverable from seed
+  / [1]                         ; imported: private key, if exported, is in
                                 ; the secret store under this address's pubkey
 
 derivation-info = {
@@ -354,8 +354,8 @@ transaction = {
   ? 9: extensions,
 }
 
-transaction-data = [0, [raw-tx-data]]
-                 / [1, [compact-tx-data]]
+transaction-data = [0, raw-tx-data]
+                 / [1, compact-tx-data]
 
 raw-tx-data = { 0: bstr }       ; canonical Zcash transaction encoding
 
@@ -386,11 +386,11 @@ received-output = {
   ? 5: txid,                    ; spent-by
 }
 
-received-output-pool = [0, [transparent-output-data]]
-                     / [1, [sprout-output-data]]
-                     / [2, [sapling-output-data]]
-                     / [3, [orchard-output-data]]
-                     / [4, [ironwood-output-data]]
+received-output-pool = [0, transparent-output-data]
+                     / [1, sprout-output-data]
+                     / [2, sapling-output-data]
+                     / [3, orchard-output-data]
+                     / [4, ironwood-output-data]
 
 transparent-output-data = {
   ? 0: bstr,                    ; scriptPubKey, for UTXOs whose containing
@@ -423,8 +423,8 @@ ironwood-output-data = {
   ? 1: bytes32,                 ; nullifier
 }
 
-commitment-tree-data = [0, [tree-position]]
-                     / [1, [incremental-witness]]
+commitment-tree-data = [0, tree-position]
+                     / [1, incremental-witness]
 
 tree-position = { 0: uint }     ; 0-based leaf position of the note
                                 ; commitment in its pool's tree
@@ -443,10 +443,10 @@ incremental-witness = {
 ; and zcashd persists no Sprout sent-output metadata (its recipient mapping
 ; records apply only to unified-address sends). A wallet that independently
 ; tracked such records may carry them as extension data.
-sent-output = [0, [transparent-sent-output]]
-            / [1, [sapling-sent-output]]
-            / [2, [orchard-sent-output]]
-            / [3, [ironwood-sent-output]]
+sent-output = [0, transparent-sent-output]
+            / [1, sapling-sent-output]
+            / [2, orchard-sent-output]
+            / [3, ironwood-sent-output]
 
 transparent-sent-output = {
   0: uint,                      ; output-index within the transaction's vout
@@ -487,8 +487,8 @@ address-book-entry = {
   ? 3: extensions,
 }
 
-secrets = [0, [secret-store]]   ; plaintext
-        / [1, [encrypted-store]]
+secrets = [0, secret-store]     ; plaintext
+        / [1, encrypted-store]
 
 encrypted-store = {
   0: bstr,                      ; age ciphertext; plaintext is the CBOR
@@ -509,8 +509,8 @@ seed-entry = {
   1: seed-material,
 }
 
-seed-material = [0, [bip39-mnemonic]]
-              / [1, [legacy-seed]]
+seed-material = [0, bip39-mnemonic]
+              / [1, legacy-seed]
 
 legacy-seed = bytes32           ; raw pre-mnemonic HD seed bytes
 
@@ -609,14 +609,15 @@ established practice of COSE and CWT, produce materially smaller documents
 never-reuse evolution discipline as protobuf field numbers. The CDDL registry
 in this document, which is versioned and published, supplies the names.
 
-**Why `[id, [body]]` unions.** Encoding data-bearing variants with exactly
-one item inside an array gives every variant body a named schema rule,
-keeps the encoding of "no payload" (`[]`) distinct from any body, and — in
-the reference implementation — sidesteps a class of encoder disagreements
-about optional fields embedded directly in variant bodies. A body is a
-record unless the payload is a single canonical encoding, in which case
-that encoding's byte or text string is carried directly: a one-field
-record shell around such an encoding would name the same concept twice.
+**Why `[id, body?]` unions.** Encoding data-bearing variants with exactly
+one body item gives every variant body a named schema rule, keeps the
+encoding of "no payload" (the one-element array `[id]`) distinct from any
+body, and — in the reference implementation — sidesteps a class of encoder
+disagreements about optional fields embedded directly in variant bodies. A
+body is a record unless the payload is a single canonical encoding, in
+which case that encoding's byte or text string is carried directly: a
+one-field record shell around such an encoding would name the same concept
+twice.
 
 **Prior format.** An earlier iteration of ZeWIF serialized to Gordian
 Envelope (dcbor). That design imported a large dependency stack (223 crates

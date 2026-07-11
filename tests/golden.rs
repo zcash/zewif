@@ -403,7 +403,7 @@ fn full_wallet() -> ZewifWallet {
     wallet
 }
 
-/// A minimal mainnet wallet, present to exercise the `network = [0, []]`
+/// A minimal mainnet wallet, present to exercise the `network = [0]`
 /// (mainnet) union variant. Account and address-book coverage lives in the
 /// regtest wallet; this wallet carries a single view-only account so the
 /// mainnet tag appears in a non-degenerate wallet.
@@ -418,7 +418,7 @@ fn mainnet_wallet() -> ZewifWallet {
     wallet
 }
 
-/// A minimal testnet wallet, present to exercise the `network = [1, []]`
+/// A minimal testnet wallet, present to exercise the `network = [1]`
 /// (testnet) union variant.
 fn testnet_wallet() -> ZewifWallet {
     let mut wallet = ZewifWallet::new(Network::Testnet);
