@@ -6,6 +6,7 @@ use crate::{Bip39Mnemonic, LegacySeed};
 ///
 /// Either a BIP-39 mnemonic phrase or a pre-BIP39 raw seed.
 #[derive(Clone, PartialEq, Encode, Decode)]
+#[cbor(flat)]
 pub enum SeedMaterial {
     /// A BIP-39 mnemonic phrase (typically 12 or 24 words) used as a
     /// human-readable seed
@@ -20,10 +21,10 @@ impl std::fmt::Debug for SeedMaterial {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Bip39Mnemonic(phrase) => {
-                write!(f, "SeedMaterial::Bip39Mnemonic(\"{:?}\")", phrase)
+                write!(f, "SeedMaterial::Bip39Mnemonic(\"{phrase:?}\")")
             }
             Self::LegacySeed(seed) => {
-                write!(f, "SeedMaterial::LegacySeed({:?})", seed)
+                write!(f, "SeedMaterial::LegacySeed({seed:?})")
             }
         }
     }
@@ -33,10 +34,10 @@ impl std::fmt::Display for SeedMaterial {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Bip39Mnemonic(phrase) => {
-                write!(f, "SeedMaterial::Bip39Mnemonic(\"{:?}\")", phrase)
+                write!(f, "SeedMaterial::Bip39Mnemonic(\"{phrase:?}\")")
             }
             Self::LegacySeed(seed) => {
-                write!(f, "SeedMaterial::LegacySeed({:?})", seed)
+                write!(f, "SeedMaterial::LegacySeed({seed:?})")
             }
         }
     }

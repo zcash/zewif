@@ -6,6 +6,7 @@ use minicbor::{Decode, Encode};
 /// Distinguishes between the address protocols supported in Zcash:
 /// transparent (t-), Sprout (zc-), Sapling (zs-), and unified (u-).
 #[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[cbor(flat)]
 pub enum ProtocolAddress {
     /// A transparent address (t-address).
     #[n(0)]

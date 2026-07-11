@@ -383,10 +383,7 @@ fn emitted_cbor_conforms_to_schema() {
     let bytes = minicbor::to_vec(&document).expect("CBOR encoding succeeds");
 
     if let Err(diagnostics) = cddl_cat::validate_cbor_bytes("zewif", &schema, &bytes) {
-        panic!(
-            "the emitted CBOR does not conform to docs/zewif.cddl:\n{}",
-            diagnostics
-        );
+        panic!("the emitted CBOR does not conform to docs/zewif.cddl:\n{diagnostics}");
     }
 }
 
@@ -402,10 +399,7 @@ fn encrypted_secrets_document_conforms_to_schema() {
     let bytes = minicbor::to_vec(&document).expect("CBOR encoding succeeds");
 
     if let Err(diagnostics) = cddl_cat::validate_cbor_bytes("zewif", &schema, &bytes) {
-        panic!(
-            "the emitted CBOR does not conform to docs/zewif.cddl:\n{}",
-            diagnostics
-        );
+        panic!("the emitted CBOR does not conform to docs/zewif.cddl:\n{diagnostics}");
     }
 }
 
@@ -423,10 +417,7 @@ fn assert_fixture_payload_conforms(fixture: &str) {
     let payload = &document[zewif::MAGIC_BYTES.len() + 4..];
 
     if let Err(diagnostics) = cddl_cat::validate_cbor_bytes("zewif", &schema, payload) {
-        panic!(
-            "the {} payload does not conform to docs/zewif.cddl:\n{}",
-            fixture, diagnostics
-        );
+        panic!("the {fixture} payload does not conform to docs/zewif.cddl:\n{diagnostics}");
     }
 }
 

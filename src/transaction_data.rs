@@ -8,6 +8,7 @@ use crate::Data;
 /// `getrawtransaction`), or only the compact representation returned by a
 /// light wallet server, or neither (only the txid is known).
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[cbor(flat)]
 pub enum TransactionData {
     /// Full serialized transaction in the canonical Zcash encoding.
     #[n(0)]

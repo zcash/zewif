@@ -179,7 +179,7 @@ impl std::fmt::Display for MnemonicLanguage {
 /// Formats the mnemonic language for debugging output
 impl std::fmt::Debug for MnemonicLanguage {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{self}")
     }
 }
 

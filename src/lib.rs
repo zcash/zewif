@@ -91,7 +91,7 @@ pub struct NoQuotesDebugOption<'a, T>(pub &'a Option<T>);
 impl<T: Display> Debug for NoQuotesDebugOption<'_, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.0 {
-            Some(val) => write!(f, "Some({})", val),
+            Some(val) => write!(f, "Some({val})"),
             None => write!(f, "None"),
         }
     }
