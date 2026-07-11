@@ -69,10 +69,10 @@ pub fn format_zats_as_zec(amount: impl Into<u64>) -> String {
     let integer = amount / 100_000_000;
     let fraction = amount % 100_000_000;
     if fraction == 0 {
-        return format!("ZEC {}.0", integer);
+        return format!("ZEC {integer}.0");
     }
     // Format fractional part with leading zeros, then remove trailing zeros.
-    let fraction_str = format!("{:08}", fraction);
+    let fraction_str = format!("{fraction:08}");
     let trimmed_fraction = fraction_str.trim_end_matches('0');
-    format!("ZEC {}.{}", integer, trimmed_fraction)
+    format!("ZEC {integer}.{trimmed_fraction}")
 }

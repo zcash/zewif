@@ -20,10 +20,10 @@ impl std::fmt::Debug for SeedMaterial {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Bip39Mnemonic(phrase) => {
-                write!(f, "SeedMaterial::Bip39Mnemonic(\"{:?}\")", phrase)
+                write!(f, "SeedMaterial::Bip39Mnemonic(\"{phrase:?}\")")
             }
             Self::LegacySeed(seed) => {
-                write!(f, "SeedMaterial::LegacySeed({:?})", seed)
+                write!(f, "SeedMaterial::LegacySeed({seed:?})")
             }
         }
     }
@@ -33,10 +33,10 @@ impl std::fmt::Display for SeedMaterial {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Bip39Mnemonic(phrase) => {
-                write!(f, "SeedMaterial::Bip39Mnemonic(\"{:?}\")", phrase)
+                write!(f, "SeedMaterial::Bip39Mnemonic(\"{phrase:?}\")")
             }
             Self::LegacySeed(seed) => {
-                write!(f, "SeedMaterial::LegacySeed({:?})", seed)
+                write!(f, "SeedMaterial::LegacySeed({seed:?})")
             }
         }
     }
