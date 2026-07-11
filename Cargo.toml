@@ -4,6 +4,8 @@ version = "1.0.0-rc.1"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Reference implementation of the Zcash Wallet Interchange Format"
+homepage = "https://github.com/zcash/zewif"
+repository = "https://github.com/zcash/zewif"
 
 [dependencies]
 # Version bumps of minicbor are format-affecting changes, permitted only when
