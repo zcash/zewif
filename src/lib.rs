@@ -15,10 +15,14 @@
 //! ## Serialization
 //!
 //! A ZeWIF document is written and read with [`Zewif::to_bytes`] and
-//! [`Zewif::from_bytes`]: the [`MAGIC_BYTES`] and a little-endian format
-//! version ([`ZEWIF_VERSION_1`]) followed by the deterministic CBOR payload,
-//! conforming to the CDDL schema in `docs/draft-nuttycom-zewif.md`.
-//! Individual types encode and decode via [`minicbor`].
+//! [`Zewif::from_bytes`]. The document is a single CBOR data item: the
+//! self-described-CBOR tag ([`SELF_DESCRIBED_CBOR_TAG`], RFC 8949 §3.4.6,
+//! whose `D9 D9 F7` head lets generic tooling recognize the byte stream as
+//! CBOR) enclosing the ZeWIF tag ([`ZEWIF_TAG`]) enclosing a `[version,
+//! payload]` array. The version is [`ZEWIF_VERSION_1`]; the payload is the
+//! deterministic CBOR encoding conforming to the CDDL schema in
+//! `docs/draft-nuttycom-zewif.md`. Individual types encode and decode via
+//! [`minicbor`].
 
 // Macros
 mod blob_macro;

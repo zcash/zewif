@@ -408,13 +408,30 @@ fn encrypted_secrets_document_conforms_to_schema() {
 /// productions the in-test document does not construct (notably
 /// `incremental-witness`, present in the full fixture in both shielded
 /// pools, and the encrypted-secrets branch in the encrypted fixture).
+/// Returns the payload slice of a ZeWIF document by decoding past the
+/// container framing — the self-described-CBOR tag, the ZeWIF tag, the
+/// two-element array header, and the version — to the start of the `zewif`
+/// map. Robust to the exact byte length of the framing.
+fn zewif_payload(document: &[u8]) -> &[u8] {
+    let mut d = minicbor::Decoder::new(document);
+    d.decode::<minicbor::data::Tag>()
+        .expect("self-described CBOR tag");
+    d.decode::<minicbor::data::Tag>().expect("ZeWIF tag");
+    assert_eq!(
+        d.array().expect("container array"),
+        Some(2),
+        "container is a two-element array"
+    );
+    d.u32().expect("container version");
+    &document[d.position()..]
+}
+
 fn assert_fixture_payload_conforms(fixture: &str) {
     let schema = load_schema();
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let document = std::fs::read(manifest_dir.join("tests/fixtures/v1").join(fixture))
         .expect("golden fixture is readable");
-    // Strip the container header: 5 magic bytes + 4-byte LE version.
-    let payload = &document[zewif::MAGIC_BYTES.len() + 4..];
+    let payload = zewif_payload(&document);
 
     if let Err(diagnostics) = cddl_cat::validate_cbor_bytes("zewif", &schema, payload) {
         panic!("the {fixture} payload does not conform to docs/zewif.cddl:\n{diagnostics}");

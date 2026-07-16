@@ -49,7 +49,10 @@ design choices:
   Standard (STD 94) with independent implementations in every mainstream
   language, and is self-describing at the data-model level: any generic CBOR
   tool can decode the structure of a ZeWIF file without this specification in
-  hand.
+  hand. A ZeWIF document begins with the self-described-CBOR tag (RFC 8949
+  §3.4.6), so its leading bytes are a magic number that identifies the file as
+  CBOR to content-sniffing tools, and it carries a registered CBOR tag that
+  identifies it specifically as ZeWIF.
 - **A normative machine-readable schema.** The CDDL schema in this document is
   the authoritative definition of the format; the Rust reference
   implementation conforms to it, not the reverse.
@@ -77,21 +80,45 @@ defines network behavior.
 
 ## Container format
 
-A ZeWIF document is the concatenation of:
+A ZeWIF document is a single CBOR data item, a nesting of two tags around a
+`[version, payload]` array:
 
-| Bytes | Content |
-|-------|---------|
-| 5     | Magic: the ASCII bytes `ZEWIF` (`0x5A 0x45 0x57 0x49 0x46`) |
-| 4     | Format version, unsigned 32-bit little-endian. This document defines version 1. |
-| rest  | The payload: a single CBOR data item conforming to the `zewif` rule of the schema below. |
+```text
+#6.55799(#6.<TN>([version, payload]))
+```
 
-Readers MUST reject a document whose magic does not match, and MUST NOT
-attempt to interpret the payload of a document whose version they do not
-implement. The container version selects the schema revision and every
+where, from the outside in:
+
+- **`#6.55799(...)`** is the "Self-Described CBOR" tag (RFC 8949 §3.4.6). It
+  carries no semantics beyond marking its content; its purpose here is its
+  encoding, the three bytes `0xD9 0xD9 0xF7`, which are a registered magic
+  number identifying the byte stream as CBOR to generic content-sniffing
+  tools. Every ZeWIF document begins with these three bytes.
+- **`#6.<TN>(...)`** is the ZeWIF tag, `<TN>` being the tag number assigned in
+  the IANA "CBOR Tags" registry for this format (see [Container tag](#container-tag)).
+  It gives a decoder that knows the tag positive identification of the item as
+  a ZeWIF document.
+- **`[version, payload]`** is a definite-length two-element array: an unsigned
+  `version` (this document defines version 1) followed by the `payload`, a
+  single CBOR data item conforming to the `zewif` rule of the schema below.
+
+Readers MUST reject a document not framed by these two tags in this order, and
+MUST NOT attempt to interpret the payload of a document whose version they do
+not implement. The container version selects the schema revision and every
 parsing rule applicable to the payload; implementations supporting multiple
-versions MUST dispatch on it rather than attempting to unify parsers.
-Version 1 payloads are not compressed; compression, if ever introduced, will
-be signalled by a new container version.
+versions MUST dispatch on it rather than attempting to unify parsers. Because
+the version precedes the payload in the array, a reader determines the version
+before decoding the payload. Version 1 payloads are not compressed;
+compression, if ever introduced, will be signalled by a new container version.
+
+### Container tag
+
+The ZeWIF tag number `<TN>` is registered in the First Come First Served range
+of the IANA "CBOR Tags" registry [^RFC8949]. The registration requests the
+value **133133**, which echoes Zcash's SLIP-0044 registered coin type (133) by
+repetition. Until IANA confirms the assignment this value is provisional, and
+implementations of pre-1.0 release-candidate revisions MUST NOT treat any
+document as stable across a change to the assigned number.
 
 ## CBOR profile
 
@@ -578,8 +605,9 @@ A revision of this specification MAY:
 
 - add new optional fields to a record under fresh indices;
 - add new variants to a tagged union under fresh identifiers;
-- add new fields to the container after the version field, by incrementing
-  the container version.
+- introduce a new container version, incrementing the `version` element of
+  the container array, to signal a schema revision that a version-1 reader
+  MUST NOT attempt to parse.
 
 A revision MUST NOT change the type or meaning of an existing index or
 variant identifier, and MUST NOT convert an optional field to required.
