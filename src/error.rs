@@ -28,14 +28,16 @@ pub enum Error {
     TryFromSliceError(#[from] TryFromSliceError),
 
     // Container format errors
-    /// The document does not begin with the ZeWIF magic bytes.
-    #[error("Not a ZeWIF document: bad magic bytes")]
-    BadMagic,
+    /// The document is not framed by the expected CBOR tag: either the outer
+    /// self-described-CBOR tag (RFC 8949 §3.4.6) or the ZeWIF tag is absent or
+    /// carries the wrong value. Carries the expected and the found tag number.
+    #[error("Unexpected CBOR tag: expected {expected}, found {found}")]
+    UnexpectedTag { expected: u64, found: u64 },
 
-    /// The document ends before the end of the fixed-size container header;
-    /// carries the number of bytes present.
-    #[error("Truncated ZeWIF container header: {0} bytes")]
-    TruncatedHeader(usize),
+    /// The tag content is not the expected `[version, payload]` array (wrong
+    /// arity or indefinite length).
+    #[error("Malformed ZeWIF container: {0}")]
+    MalformedContainer(&'static str),
 
     /// The document declares a container version that this crate does not
     /// implement; carries the declared version.

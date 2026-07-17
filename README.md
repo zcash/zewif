@@ -148,10 +148,11 @@ without payload are bare unsigned integers, and tagged unions are
 `[variant-id, body?]` arrays. Individual types encode and decode via
 [`minicbor`](https://crates.io/crates/minicbor). A complete ZeWIF document is
 written and read with `Zewif::to_bytes` / `Zewif::from_bytes`, which frame the
-CBOR payload with the container header defined by the specification: the ASCII
-magic bytes `ZEWIF` followed by an unsigned 32-bit little-endian format
-version (currently 1). Documents with unrecognized magic bytes or an
-unsupported version are rejected without any payload interpretation.
+CBOR payload as the specification defines: the self-described-CBOR tag (RFC
+8949 §3.4.6, whose `D9 D9 F7` head marks the byte stream as CBOR) enclosing the
+registered ZeWIF tag enclosing a `[version, payload]` array (version currently
+1). Documents not framed by these tags, or carrying an unsupported version, are
+rejected without any payload interpretation.
 
 This structure provides:
 
