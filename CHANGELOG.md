@@ -7,6 +7,8 @@ and this library adheres to Rust's notion of
 
 ## [Unreleased]
 
+## [1.0.0-rc.3] 2026-07-17
+
 ### Changed
 - The container framing is now standards-based CBOR self-identification
   instead of an ASCII magic and a little-endian version header. A ZeWIF
